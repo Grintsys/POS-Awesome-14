@@ -968,6 +968,12 @@ export default {
         this.submit();
       }
     },
+    payAndPrint(e) {
+      if (e.key === "a" && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault();
+        this.submit(undefined, false, true);
+      }
+    },
     set_paid_change() {
       if (!this.paid_change) this.paid_change = 0;
 
@@ -1400,6 +1406,7 @@ export default {
   },
   created() {
     document.addEventListener("keydown", this.shortPay.bind(this));
+    document.addEventListener("keydown", this.payAndPrint.bind(this));
   },
   beforeDestroy() {
     evntBus.$off("send_invoice_doc_payment");
@@ -1415,6 +1422,7 @@ export default {
 
   destroyed() {
     document.removeEventListener("keydown", this.shortPay);
+    document.removeEventListener("keydown", this.payAndPrint);
   },
 
   watch: {
