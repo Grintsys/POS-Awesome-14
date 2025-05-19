@@ -176,7 +176,7 @@ export default {
     },
     go_about() {
       const win = window.open(
-        'https://github.com/yrestom/POS-Awesome',
+        'https://www.grintsys.com/grintsys-cloud.html',
         '_blank'
       );
       win.focus();
