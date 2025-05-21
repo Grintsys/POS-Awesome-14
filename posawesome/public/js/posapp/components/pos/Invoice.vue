@@ -1068,7 +1068,7 @@ export default {
     onQtyChange(item, value) {
       let qty = parseFloat(value);
 
-      if (isNaN(qty) || qty < 1) {
+      if (isNaN(qty) || qty == 0) {
         qty = 1; // fuerza el valor mínimo
       }
 
