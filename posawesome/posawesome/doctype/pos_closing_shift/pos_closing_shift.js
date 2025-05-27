@@ -30,7 +30,8 @@ frappe.ui.form.on('POS Closing Shift', {
 			frappe.run_serially([
 				() => frm.trigger("set_opening_amounts"),
 				() => frm.trigger("get_pos_invoices"),
-				() => frm.trigger("get_pos_payments")
+				() => frm.trigger("get_pos_payments"),
+				() => frm.trigger("get_cash_withdrawel")
 			]);
 		}
 	},
@@ -57,6 +58,21 @@ frappe.ui.form.on('POS Closing Shift', {
 			callback: (r) => {
 				let pos_docs = r.message;
 				set_form_data(pos_docs, frm);
+				refresh_fields(frm);
+				set_html_data(frm);
+			}
+		});
+	},
+
+	get_cash_withdrawel (frm) {
+		frappe.call({
+			method: 'posawesome.posawesome.doctype.pos_closing_shift.pos_closing_shift.get_cash_withdrawel',
+			args: {
+				pos_opening_shift: frm.doc.pos_opening_shift,
+			},
+			callback: (r) => {
+				let pos_docs = r.message;
+				set_form_data_cash_withdrawel(pos_docs, frm);
 				refresh_fields(frm);
 				set_html_data(frm);
 			}
@@ -96,6 +112,23 @@ function set_form_data (data, frm) {
 		add_to_taxes(d, frm);
 	});
 }
+
+function set_form_data_cash_withdrawel (data, frm) {
+	data.forEach(d => {		
+		add_deatil_withdrawel(d, frm);
+		frm.doc.grand_total -= flt(d.amount);
+		frm.doc.net_total -= flt(d.amount);
+		add_cash_withdrawal_to_payment(d.amount, frm);
+	});
+}
+
+function add_deatil_withdrawel(d, frm) {
+	frm.add_child("cash_witdrawel", {
+		cashier: d.cashier,
+		amount: d.amount
+	});
+}
+
 
 function set_form_payments_data (data, frm) {
 	data.forEach(d => {
@@ -146,6 +179,12 @@ function add_to_payments (d, frm) {
 	});
 }
 
+function add_cash_withdrawal_to_payment(amount, frm){
+	const payment = frm.doc.payment_reconciliation.find(pay => pay.mode_of_payment === "Efectivo");
+
+	payment.expected_amount -= flt(amount);
+}
+
 function add_pos_payment_to_payments (p, frm) {
 	const payment = frm.doc.payment_reconciliation.find(pay => pay.mode_of_payment === p.mode_of_payment);
 	if (payment) {
@@ -190,6 +229,7 @@ function refresh_fields (frm) {
 	frm.refresh_field("pos_transactions");
 	frm.refresh_field("payment_reconciliation");
 	frm.refresh_field("pos_payments");
+	frm.refresh_field("cash_witdrawel");
 	frm.refresh_field("taxes");
 	frm.refresh_field("grand_total");
 	frm.refresh_field("net_total");

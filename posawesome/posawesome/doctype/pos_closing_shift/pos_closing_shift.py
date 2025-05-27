@@ -113,6 +113,25 @@ def get_pos_invoices(pos_opening_shift):
 
     return data
 
+@frappe.whitelist()
+def get_cash_withdrawel(pos_opening_shift):
+    submit_printed_invoices(pos_opening_shift)
+    data = frappe.db.sql(
+        """
+	select
+		name
+	from
+		`tabRetiro de efectivo`
+	where
+		docstatus = 1 and pos_opening_shift = %s
+	""",
+        (pos_opening_shift),
+        as_dict=1,
+    )
+
+    data = [frappe.get_doc("Retiro de efectivo", d.name).as_dict() for d in data]
+
+    return data
 
 @frappe.whitelist()
 def get_payments_entries(pos_opening_shift):
@@ -155,6 +174,8 @@ def make_closing_shift_from_opening(opening_shift):
     taxes = []
     payments = []
     pos_payments_table = []
+    cash_witdrawals = []
+
     for detail in opening_shift.get("balance_details"):
         payments.append(
             frappe._dict(
@@ -258,10 +279,32 @@ def make_closing_shift_from_opening(opening_shift):
                 )
             )
 
+    withdrawals = get_cash_withdrawel(opening_shift.get("name"))
+
+    for cd in withdrawals:
+        cash_witdrawals.append(
+            frappe._dict(
+                {
+                    "cashier": cd.cashier,
+                    "amount": cd.amount,
+                }
+            )
+        )
+        closing_shift.grand_total -= flt(cd.amount)
+        closing_shift.net_total -= flt(cd.amount)
+
+        existing_pay = [
+            pay for pay in payments if pay.mode_of_payment == "Efectivo"
+        ]
+
+        if existing_pay:
+            existing_pay[0].expected_amount -= flt(cd.amount)
+
     closing_shift.set("pos_transactions", pos_transactions)
     closing_shift.set("payment_reconciliation", payments)
     closing_shift.set("taxes", taxes)
     closing_shift.set("pos_payments", pos_payments_table)
+    closing_shift.set("cash_witdrawel", cash_witdrawals)
 
     return closing_shift
 
