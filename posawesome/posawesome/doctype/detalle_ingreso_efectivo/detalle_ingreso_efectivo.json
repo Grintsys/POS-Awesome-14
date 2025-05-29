@@ -1,28 +1,17 @@
 {
  "actions": [],
  "allow_rename": 1,
- "creation": "2025-05-26 11:06:35.329145",
+ "creation": "2025-05-28 09:48:45.234804",
  "default_view": "List",
  "doctype": "DocType",
  "editable_grid": 1,
  "engine": "InnoDB",
  "field_order": [
-  "type_transaction",
-  "pos_opening_shift",
   "cashier",
   "amount",
-  "note",
   "amended_from"
  ],
  "fields": [
-  {
-   "fieldname": "pos_opening_shift",
-   "fieldtype": "Link",
-   "in_list_view": 1,
-   "label": "POS Opening Shift",
-   "options": "POS Opening Shift",
-   "reqd": 1
-  },
   {
    "fieldname": "cashier",
    "fieldtype": "Data",
@@ -41,47 +30,22 @@
    "fieldtype": "Link",
    "label": "Amended From",
    "no_copy": 1,
-   "options": "Retiro de efectivo",
+   "options": "Detalle Ingreso Efectivo",
    "print_hide": 1,
    "read_only": 1,
    "search_index": 1
-  },
-  {
-   "fieldname": "note",
-   "fieldtype": "Long Text",
-   "label": "Note",
-   "reqd": 1
-  },
-  {
-   "fieldname": "type_transaction",
-   "fieldtype": "Select",
-   "label": "Tipo de transaction",
-   "options": "Retiro\nIngreso",
-   "reqd": 1
   }
  ],
  "index_web_pages_for_search": 1,
  "is_submittable": 1,
+ "istable": 1,
  "links": [],
- "modified": "2025-05-28 09:24:28.732928",
+ "modified": "2025-05-28 09:48:45.234804",
  "modified_by": "Administrator",
  "module": "POSAwesome",
- "name": "Retiro de efectivo",
+ "name": "Detalle Ingreso Efectivo",
  "owner": "Administrator",
- "permissions": [
-  {
-   "create": 1,
-   "delete": 1,
-   "email": 1,
-   "export": 1,
-   "print": 1,
-   "read": 1,
-   "report": 1,
-   "role": "System Manager",
-   "share": 1,
-   "write": 1
-  }
- ],
+ "permissions": [],
  "quick_entry": 1,
  "sort_field": "modified",
  "sort_order": "DESC",

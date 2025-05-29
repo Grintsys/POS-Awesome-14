@@ -1,9 +1,8 @@
 # Copyright (c) 2025, Youssef Restom and contributors
 # For license information, please see license.txt
 
-import frappe
+# import frappe
 from frappe.model.document import Document
 
-class Retirodeefectivo(Document):            
-	def before_naming(self):
-		self.cashier = frappe.session.user
+class DetalleIngresoEfectivo(Document):
+	pass

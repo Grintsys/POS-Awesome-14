@@ -1100,6 +1100,26 @@ def create_customer(
             set_customer_info(customer_doc.name, "email_id", email_id)
         return customer_doc
 
+@frappe.whitelist()
+def create_withdrawal_income(
+    amount,
+    pos_opening_shift,
+    note,
+    type_transaction,
+):
+    register = frappe.get_doc(
+        {
+            "doctype": "Retiro de efectivo",
+            "amount": amount,
+            "pos_opening_shift": pos_opening_shift,
+            "note": note,
+            "type_transaction": type_transaction,
+            }
+    )
+    register.insert()
+    register.submit() 
+    return register
+
 
 @frappe.whitelist()
 def get_items_from_barcode(selling_price_list, currency, barcode):

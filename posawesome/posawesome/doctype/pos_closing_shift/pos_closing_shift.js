@@ -115,10 +115,19 @@ function set_form_data (data, frm) {
 
 function set_form_data_cash_withdrawel (data, frm) {
 	data.forEach(d => {		
-		add_deatil_withdrawel(d, frm);
-		frm.doc.grand_total -= flt(d.amount);
-		frm.doc.net_total -= flt(d.amount);
-		add_cash_withdrawal_to_payment(d.amount, frm);
+		if(d.type_transaction === "Retiro"){
+			add_deatil_withdrawel(d, frm);
+			frm.doc.grand_total -= flt(d.amount);
+			frm.doc.net_total -= flt(d.amount);
+			add_cash_withdrawal_to_payment(d.amount, frm);
+		}
+		if(d.type_transaction === "Ingreso"){
+			add_deatil_inner(d, frm);
+			frm.doc.grand_total += flt(d.amount);
+			frm.doc.net_total += flt(d.amount);
+			add_cash_inner_to_payment(d.amount, frm)
+		}
+		
 	});
 }
 
@@ -129,6 +138,12 @@ function add_deatil_withdrawel(d, frm) {
 	});
 }
 
+function add_deatil_inner(d, frm) {
+	frm.add_child("cash_income", {
+		cashier: d.cashier,
+		amount: d.amount
+	});
+}
 
 function set_form_payments_data (data, frm) {
 	data.forEach(d => {
@@ -185,6 +200,12 @@ function add_cash_withdrawal_to_payment(amount, frm){
 	payment.expected_amount -= flt(amount);
 }
 
+function add_cash_inner_to_payment(amount, frm){
+	const payment = frm.doc.payment_reconciliation.find(pay => pay.mode_of_payment === "Efectivo");
+
+	payment.expected_amount += flt(amount);
+}
+
 function add_pos_payment_to_payments (p, frm) {
 	const payment = frm.doc.payment_reconciliation.find(pay => pay.mode_of_payment === p.mode_of_payment);
 	if (payment) {
@@ -230,6 +251,7 @@ function refresh_fields (frm) {
 	frm.refresh_field("payment_reconciliation");
 	frm.refresh_field("pos_payments");
 	frm.refresh_field("cash_witdrawel");
+	frm.refresh_field("cash_income");
 	frm.refresh_field("taxes");
 	frm.refresh_field("grand_total");
 	frm.refresh_field("net_total");

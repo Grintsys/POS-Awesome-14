@@ -7,6 +7,7 @@
     <NewAddress></NewAddress>
     <MpesaPayments></MpesaPayments>
     <Variants></Variants>
+    <CashWithdrawalIncome />
     <OpeningDialog v-if="dialog" :dialog="dialog"></OpeningDialog>
     <v-row v-show="!dialog">
       <v-col
@@ -76,6 +77,7 @@ import NewAddress from './NewAddress.vue';
 import Variants from './Variants.vue';
 import Returns from './Returns.vue';
 import MpesaPayments from './Mpesa-Payments.vue';
+import CashWithdrawalIncome from './CashWithdrawalIncome.vue';
 
 export default {
   data: function () {
@@ -104,6 +106,7 @@ export default {
     Variants,
     MpesaPayments,
     SalesOrders,
+    CashWithdrawalIncome,
   },
 
   methods: {
@@ -143,6 +146,9 @@ export default {
             // console.log(r);
           }
         });
+    },
+    get_cash_income_data() {
+      return evntBus.$emit('open_cash_withdrawal_income', this.pos_opening_shift.name);
     },
     submit_closing_pos(data) {
       frappe
@@ -214,6 +220,9 @@ export default {
       });
       evntBus.$on('open_closing_dialog', () => {
         this.get_closing_data();
+      });
+      evntBus.$on('open_cash_witdrawal_income_dialog', () => {
+        this.get_cash_income_data();
       });
       evntBus.$on('submit_closing_pos', (data) => {
         this.submit_closing_pos(data);

@@ -49,6 +49,18 @@
                   </v-list-item-content>
                 </v-list-item>
                 <v-list-item
+                  @click="cash_witdrawal_income_dialog"
+                >
+                  <v-list-item-icon>
+                    <v-icon>mdi-content-save-move-outline</v-icon>
+                  </v-list-item-icon>
+                  <v-list-item-content>
+                    <v-list-item-title>{{
+                      __('Retiro / Ingreso')
+                    }}</v-list-item-title>
+                  </v-list-item-content>
+                </v-list-item>
+                <v-list-item
                   @click="print_last_invoice"
                   v-if="
                     pos_profile.posa_allow_print_last_invoice &&
@@ -183,6 +195,9 @@ export default {
     },
     close_shift_dialog() {
       evntBus.$emit('open_closing_dialog');
+    },
+    cash_witdrawal_income_dialog() {
+      evntBus.$emit('open_cash_witdrawal_income_dialog');
     },
     show_mesage(data) {
       this.snack = true;

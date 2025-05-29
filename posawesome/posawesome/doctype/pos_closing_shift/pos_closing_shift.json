@@ -22,6 +22,8 @@
   "section_break_9",
   "cash_with",
   "cash_witdrawel",
+  "section_income_cash",
+  "cash_income",
   "pos_payments",
   "section_break_if3m1",
   "payment_reconciliation_details",
@@ -209,11 +211,22 @@
    "fieldtype": "Table",
    "label": "Retiro de efectivo",
    "options": "Detalle Retiro Efectivo"
+  },
+  {
+   "fieldname": "section_income_cash",
+   "fieldtype": "Section Break",
+   "label": "Ingresos de efectivo"
+  },
+  {
+   "fieldname": "cash_income",
+   "fieldtype": "Table",
+   "label": "Ingreso de efectivo",
+   "options": "Detalle Ingreso Efectivo"
   }
  ],
  "is_submittable": 1,
  "links": [],
- "modified": "2025-05-27 15:37:13.612183",
+ "modified": "2025-05-28 09:49:03.592016",
  "modified_by": "Administrator",
  "module": "POSAwesome",
  "name": "POS Closing Shift",

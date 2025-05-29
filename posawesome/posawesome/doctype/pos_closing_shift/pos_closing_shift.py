@@ -175,6 +175,7 @@ def make_closing_shift_from_opening(opening_shift):
     payments = []
     pos_payments_table = []
     cash_witdrawals = []
+    cash_inner = []
 
     for detail in opening_shift.get("balance_details"):
         payments.append(
@@ -282,29 +283,50 @@ def make_closing_shift_from_opening(opening_shift):
     withdrawals = get_cash_withdrawel(opening_shift.get("name"))
 
     for cd in withdrawals:
-        cash_witdrawals.append(
-            frappe._dict(
-                {
-                    "cashier": cd.cashier,
-                    "amount": cd.amount,
-                }
+        if cd.type_transaction == "Retiro":
+            cash_witdrawals.append(
+                frappe._dict(
+                    {
+                        "cashier": cd.cashier,
+                        "amount": cd.amount,
+                    }
+                )
             )
-        )
-        closing_shift.grand_total -= flt(cd.amount)
-        closing_shift.net_total -= flt(cd.amount)
+            closing_shift.grand_total -= flt(cd.amount)
+            closing_shift.net_total -= flt(cd.amount)
 
-        existing_pay = [
-            pay for pay in payments if pay.mode_of_payment == "Efectivo"
-        ]
+            existing_pay = [
+                pay for pay in payments if pay.mode_of_payment == "Efectivo"
+            ]
 
-        if existing_pay:
-            existing_pay[0].expected_amount -= flt(cd.amount)
+            if existing_pay:
+                existing_pay[0].expected_amount -= flt(cd.amount)
+        
+        if cd.type_transaction == "Ingreso":
+            cash_inner.append(
+                frappe._dict(
+                    {
+                        "cashier": cd.cashier,
+                        "amount": cd.amount,
+                    }
+                )
+            )
+            closing_shift.grand_total += flt(cd.amount)
+            closing_shift.net_total += flt(cd.amount)
+
+            existing_pay = [
+                pay for pay in payments if pay.mode_of_payment == "Efectivo"
+            ]
+
+            if existing_pay:
+                existing_pay[0].expected_amount += flt(cd.amount)
 
     closing_shift.set("pos_transactions", pos_transactions)
     closing_shift.set("payment_reconciliation", payments)
     closing_shift.set("taxes", taxes)
     closing_shift.set("pos_payments", pos_payments_table)
     closing_shift.set("cash_witdrawel", cash_witdrawals)
+    closing_shift.set("cash_income", cash_inner)
 
     return closing_shift
 
