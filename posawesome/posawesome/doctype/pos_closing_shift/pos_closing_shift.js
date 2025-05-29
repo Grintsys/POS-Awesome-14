@@ -125,7 +125,7 @@ function set_form_data_cash_withdrawel (data, frm) {
 			add_deatil_inner(d, frm);
 			// frm.doc.grand_total += flt(d.amount);
 			// frm.doc.net_total += flt(d.amount);
-			add_cash_inner_to_payment(d.amount, frm)
+			add_cash_inner_to_payment(d.amount, frm);
 		}
 		
 	});
