@@ -52,7 +52,7 @@
                   @click="cash_witdrawal_income_dialog"
                 >
                   <v-list-item-icon>
-                    <v-icon>mdi-content-save-move-outline</v-icon>
+                    <v-icon>mdi-currency-usd</v-icon>
                   </v-list-item-icon>
                   <v-list-item-content>
                     <v-list-item-title>{{

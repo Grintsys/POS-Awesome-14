@@ -141,6 +141,16 @@
    "link_type": "DocType",
    "onboard": 0,
    "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Retiro de efectivo",
+   "link_count": 0,
+   "link_to": "Retiro de efectivo",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
   }
  ],
  "modified": "2023-06-07 17:35:14.887611",
