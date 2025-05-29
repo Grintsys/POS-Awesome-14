@@ -289,11 +289,12 @@ def make_closing_shift_from_opening(opening_shift):
                     {
                         "cashier": cd.cashier,
                         "amount": cd.amount,
+                        "note": cd.note,
                     }
                 )
             )
-            closing_shift.grand_total -= flt(cd.amount)
-            closing_shift.net_total -= flt(cd.amount)
+            # closing_shift.grand_total -= flt(cd.amount)
+            # closing_shift.net_total -= flt(cd.amount)
 
             existing_pay = [
                 pay for pay in payments if pay.mode_of_payment == "Efectivo"
@@ -308,11 +309,12 @@ def make_closing_shift_from_opening(opening_shift):
                     {
                         "cashier": cd.cashier,
                         "amount": cd.amount,
+                        "note": cd.note,
                     }
                 )
             )
-            closing_shift.grand_total += flt(cd.amount)
-            closing_shift.net_total += flt(cd.amount)
+            # closing_shift.grand_total += flt(cd.amount)
+            # closing_shift.net_total += flt(cd.amount)
 
             existing_pay = [
                 pay for pay in payments if pay.mode_of_payment == "Efectivo"

@@ -117,14 +117,14 @@ function set_form_data_cash_withdrawel (data, frm) {
 	data.forEach(d => {		
 		if(d.type_transaction === "Retiro"){
 			add_deatil_withdrawel(d, frm);
-			frm.doc.grand_total -= flt(d.amount);
-			frm.doc.net_total -= flt(d.amount);
+			// frm.doc.grand_total -= flt(d.amount);
+			// frm.doc.net_total -= flt(d.amount);
 			add_cash_withdrawal_to_payment(d.amount, frm);
 		}
 		if(d.type_transaction === "Ingreso"){
 			add_deatil_inner(d, frm);
-			frm.doc.grand_total += flt(d.amount);
-			frm.doc.net_total += flt(d.amount);
+			// frm.doc.grand_total += flt(d.amount);
+			// frm.doc.net_total += flt(d.amount);
 			add_cash_inner_to_payment(d.amount, frm)
 		}
 		
@@ -134,14 +134,16 @@ function set_form_data_cash_withdrawel (data, frm) {
 function add_deatil_withdrawel(d, frm) {
 	frm.add_child("cash_witdrawel", {
 		cashier: d.cashier,
-		amount: d.amount
+		amount: d.amount,
+		note: d.note
 	});
 }
 
 function add_deatil_inner(d, frm) {
 	frm.add_child("cash_income", {
 		cashier: d.cashier,
-		amount: d.amount
+		amount: d.amount,
+		note: d.note
 	});
 }
 
