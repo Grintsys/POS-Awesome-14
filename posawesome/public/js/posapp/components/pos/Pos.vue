@@ -165,10 +165,36 @@ export default {
               color: 'success',
             });
             this.check_opening_entry();
+            this.load_print_page_close(r.message);
           } else {
             console.log(r);
           }
         });
+    },
+    load_print_page_close(nameMovement) {
+      const print_format =
+        this.pos_profile.print_format_for_online ||
+        this.pos_profile.close_pos_format;
+      const letter_head = this.pos_profile.letter_head || 0;
+      const url =
+        frappe.urllib.get_base_url() +
+        "/printview?doctype=POS%20Closing%20Shift&name=" +
+        nameMovement +
+        "&trigger_print=1" +
+        "&format=" +
+        print_format +
+        "&no_letterhead=" +
+        letter_head;
+      const printWindow = window.open(url, "Print");
+      printWindow.addEventListener(
+        "load",
+        function () {
+          printWindow.print();
+          // printWindow.close();
+          // NOTE : uncomoent this to auto closing printing window
+        },
+        true
+      );
     },
     get_offers(pos_profile) {
       return frappe
