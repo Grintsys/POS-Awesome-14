@@ -10,6 +10,7 @@
   "type_transaction",
   "pos_opening_shift",
   "cashier",
+  "posting_date",
   "amount",
   "note",
   "amended_from"
@@ -58,12 +59,18 @@
    "label": "Tipo de transaction",
    "options": "Retiro\nIngreso",
    "reqd": 1
+  },
+  {
+   "fieldname": "posting_date",
+   "fieldtype": "Datetime",
+   "label": "Fecha y hora",
+   "read_only": 1
   }
  ],
  "index_web_pages_for_search": 1,
  "is_submittable": 1,
  "links": [],
- "modified": "2025-05-28 09:24:28.732928",
+ "modified": "2025-05-30 12:17:43.090653",
  "modified_by": "Administrator",
  "module": "POSAwesome",
  "name": "Retiro de efectivo",

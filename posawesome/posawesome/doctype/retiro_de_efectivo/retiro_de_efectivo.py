@@ -3,7 +3,9 @@
 
 import frappe
 from frappe.model.document import Document
+from frappe.utils import now_datetime
 
 class Retirodeefectivo(Document):            
 	def before_naming(self):
 		self.cashier = frappe.session.user
+		self.posting_date = now_datetime()
