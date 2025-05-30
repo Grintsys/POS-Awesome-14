@@ -148,7 +148,7 @@ export default {
         });
     },
     get_cash_income_data() {
-      return evntBus.$emit('open_cash_withdrawal_income', this.pos_opening_shift.name);
+      return evntBus.$emit('open_cash_withdrawal_income', this.pos_opening_shift.name, this.pos_profile);
     },
     submit_closing_pos(data) {
       frappe

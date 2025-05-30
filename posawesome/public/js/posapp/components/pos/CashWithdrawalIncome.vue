@@ -72,6 +72,7 @@ export default {
     types: ['Retiro', 'Ingreso'],
     type: '',
     pos_opening_shift: '',
+    pos_profile: '',
   }),
   methods: {
     close_dialog() {
@@ -124,7 +125,7 @@ export default {
             let text = __('Creado exitosamente.');
             
             evntBus.$emit('show_mesage', { text: text, color: 'success' });
-
+            this.load_print_page(r.message.name);
             this.close_dialog();
           } else {
             frappe.utils.play_sound('error');
@@ -136,11 +137,37 @@ export default {
         },
       });
     },
+    load_print_page(nameMovement) {
+      const print_format =
+        this.pos_profile.print_format_for_online ||
+        this.pos_profile.cash_movements_format;
+      const letter_head = this.pos_profile.letter_head || 0;
+      const url =
+        frappe.urllib.get_base_url() +
+        "/printview?doctype=Retiro%20de%20efectivo&name=" +
+        nameMovement +
+        "&trigger_print=1" +
+        "&format=" +
+        print_format +
+        "&no_letterhead=" +
+        letter_head;
+      const printWindow = window.open(url, "Print");
+      printWindow.addEventListener(
+        "load",
+        function () {
+          printWindow.print();
+          // printWindow.close();
+          // NOTE : uncomoent this to auto closing printing window
+        },
+        true
+      );
+    },
   },
   created() {
-    evntBus.$on('open_cash_withdrawal_income', (pos_opening_shift) => {
+    evntBus.$on('open_cash_withdrawal_income', (pos_opening_shift, pos_profile) => {
       this.cashDialog = true;
       this.pos_opening_shift = pos_opening_shift;
+      this.pos_profile = pos_profile;
     });
   },
 };
