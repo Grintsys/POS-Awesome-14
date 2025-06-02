@@ -9,6 +9,7 @@
  "field_order": [
   "type_transaction",
   "pos_opening_shift",
+  "pos_profile",
   "cashier",
   "posting_date",
   "amount",
@@ -65,12 +66,20 @@
    "fieldtype": "Datetime",
    "label": "Fecha y hora",
    "read_only": 1
+  },
+  {
+   "fetch_from": "pos_opening_shift.pos_profile",
+   "fieldname": "pos_profile",
+   "fieldtype": "Link",
+   "label": "POS Profile",
+   "options": "POS Profile",
+   "read_only": 1
   }
  ],
  "index_web_pages_for_search": 1,
  "is_submittable": 1,
  "links": [],
- "modified": "2025-05-30 12:17:43.090653",
+ "modified": "2025-06-02 11:14:43.202274",
  "modified_by": "Administrator",
  "module": "POSAwesome",
  "name": "Retiro de efectivo",
