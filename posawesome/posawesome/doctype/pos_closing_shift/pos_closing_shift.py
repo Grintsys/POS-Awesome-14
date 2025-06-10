@@ -12,6 +12,16 @@ from frappe.utils import flt
 
 class POSClosingShift(Document):
     def validate(self):
+        draft_invoices = frappe.get_all("Sales Invoice", filters={
+            "posa_pos_opening_shift": self.pos_opening_shift,
+            "docstatus": 0
+        }, fields=["name"])
+        if draft_invoices:
+            invoice_list = ", ".join([inv["name"] for inv in draft_invoices])
+            frappe.throw(_(
+                f"No se puede cerrar la caja porque hay facturas en estado 'Borrador' asociadas al turno.\n\nFacturas: {invoice_list}\n\nPor favor, totalice antes de cerrar la caja."
+            ))
+
         user = frappe.get_all(
             "POS Closing Shift",
             filters={
@@ -40,11 +50,10 @@ class POSClosingShift(Document):
                 _("Selected POS Opening Shift should be open."),
                 title=_("Invalid Opening Entry"),
             )
+
         self.update_payment_reconciliation()
 
     def update_payment_reconciliation(self):
-        # update the difference values in Payment Reconciliation child table
-        # get default precision for site
         precision = (
             frappe.get_cached_value("System Settings", None, "currency_precision") or 3
         )
@@ -108,10 +117,8 @@ def get_pos_invoices(pos_opening_shift):
         (pos_opening_shift),
         as_dict=1,
     )
+    return [frappe.get_doc("Sales Invoice", d.name).as_dict() for d in data]
 
-    data = [frappe.get_doc("Sales Invoice", d.name).as_dict() for d in data]
-
-    return data
 
 @frappe.whitelist()
 def get_cash_withdrawel(pos_opening_shift):
@@ -128,10 +135,8 @@ def get_cash_withdrawel(pos_opening_shift):
         (pos_opening_shift),
         as_dict=1,
     )
+    return [frappe.get_doc("Retiro de efectivo", d.name).as_dict() for d in data]
 
-    data = [frappe.get_doc("Retiro de efectivo", d.name).as_dict() for d in data]
-
-    return data
 
 @frappe.whitelist()
 def get_payments_entries(pos_opening_shift):
@@ -156,6 +161,18 @@ def get_payments_entries(pos_opening_shift):
 @frappe.whitelist()
 def make_closing_shift_from_opening(opening_shift):
     opening_shift = json.loads(opening_shift)
+
+    # ✅ Validar primero si hay facturas en borrador
+    draft_invoices = frappe.get_all("Sales Invoice", filters={
+        "posa_pos_opening_shift": opening_shift.get("name"),
+        "docstatus": 0
+    }, fields=["name"])
+    if draft_invoices:
+        invoice_list = ", ".join([inv["name"] for inv in draft_invoices])
+        frappe.throw(_(
+            f"No se puede cerrar la caja porque hay facturas en estado 'Borrador' asociadas al turno.\n\nFacturas: {invoice_list}\n\nPor favor, totalice o elimine estas facturas antes de cerrar la caja."
+        ))
+
     submit_printed_invoices(opening_shift.get("name"))
     closing_shift = frappe.new_doc("POS Closing Shift")
     closing_shift.pos_opening_shift = opening_shift.get("name")
@@ -231,13 +248,8 @@ def make_closing_shift_from_opening(opening_shift):
                     "POS Profile",
                     opening_shift.get("pos_profile"),
                     "posa_cash_mode_of_payment",
-                )
-                if not cash_mode_of_payment:
-                    cash_mode_of_payment = "Cash"
-                if existing_pay[0].mode_of_payment == cash_mode_of_payment:
-                    amount = p.amount - d.change_amount
-                else:
-                    amount = p.amount
+                ) or "Cash"
+                amount = p.amount - d.change_amount if existing_pay[0].mode_of_payment == cash_mode_of_payment else p.amount
                 existing_pay[0].expected_amount += flt(amount)
             else:
                 payments.append(
@@ -293,16 +305,12 @@ def make_closing_shift_from_opening(opening_shift):
                     }
                 )
             )
-            # closing_shift.grand_total -= flt(cd.amount)
-            # closing_shift.net_total -= flt(cd.amount)
-
             existing_pay = [
                 pay for pay in payments if pay.mode_of_payment == "Efectivo"
             ]
-
             if existing_pay:
                 existing_pay[0].expected_amount -= flt(cd.amount)
-        
+
         if cd.type_transaction == "Ingreso":
             cash_inner.append(
                 frappe._dict(
@@ -313,13 +321,9 @@ def make_closing_shift_from_opening(opening_shift):
                     }
                 )
             )
-            # closing_shift.grand_total += flt(cd.amount)
-            # closing_shift.net_total += flt(cd.amount)
-
             existing_pay = [
                 pay for pay in payments if pay.mode_of_payment == "Efectivo"
             ]
-
             if existing_pay:
                 existing_pay[0].expected_amount += flt(cd.amount)
 
