@@ -52,10 +52,17 @@ frappe.PosApp.posapp = class {
     beforeUnloadHandler(event) {
         if (this.vue && this.vue.unsavedProducts) {
             const message = 'Hay productos sin guardar, ¿seguro que quieres salir?';
-            event.returnValue = message;  // Para algunos navegadores
-            return message;               // Para otros navegadores
+            event.returnValue = message;
+            return message;
         }
-        // Si no hay productos sin guardar, no hacer nada
+    }
+    keydownHandler(event) {
+        if (event.key === 'F5' && this.vue && this.vue.unsavedProducts) {
+            const confirmReload = confirm('Hay productos sin guardar, ¿seguro que quieres recargar la página?');
+            if (!confirmReload) {
+                event.preventDefault();
+            }
+        }
     }
 
     keydownHandler(event) {
