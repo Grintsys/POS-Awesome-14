@@ -57,22 +57,14 @@ frappe.PosApp.posapp = class {
         }
     }
     keydownHandler(event) {
-        if (event.key === 'F5' && this.vue && this.vue.unsavedProducts) {
-            const confirmReload = confirm('Hay productos sin guardar, ¿seguro que quieres recargar la página?');
+        const isF5 = event.key === 'F5';
+        const isCtrlR = event.key.toLowerCase() === 'r' && event.ctrlKey;
+        const isCmdR = event.key.toLowerCase() === 'r' && event.metaKey;
+
+        if ((isF5 || isCtrlR || isCmdR) && this.vue && this.vue.unsavedProducts) {
+            const confirmReload = confirm('⚠️ Hay productos sin guardar. ¿Seguro que quieres recargar la página?');
             if (!confirmReload) {
                 event.preventDefault();
-            }
-        }
-    }
-
-    keydownHandler(event) {
-        // Capturar F5 (código 116)
-        if (event.key === 'F5') {
-            if (this.vue && this.vue.unsavedProducts) {
-                const confirmReload = confirm('Hay productos sin guardar, ¿seguro que quieres recargar la página?');
-                if (!confirmReload) {
-                    event.preventDefault();
-                }
             }
         }
     }
@@ -83,13 +75,12 @@ frappe.PosApp.posapp = class {
 
 };
 
-// PRUEBA FUERTE: interceptar recarga o cierre
-window.addEventListener("beforeunload", function (e) {
-  console.log("🔁 Evento beforeunload detectado");
-
-  // Muestra mensaje siempre para probar que funciona
-  const confirmationMessage = "⚠️ ¿Estás seguro que quieres salir del POS?";
-  e.preventDefault();
-  e.returnValue = confirmationMessage;
-  return confirmationMessage;
-});
+if (frappe.boot && frappe.boot.module_app && frappe.boot.module_app["posawesome"] === "posawesome") {
+  window.addEventListener("beforeunload", function (e) {
+    console.log("🔁 Evento beforeunload detectado");
+    const confirmationMessage = "⚠️ ¿Estás seguro que quieres salir del POS?";
+    e.preventDefault();
+    e.returnValue = confirmationMessage;
+    return confirmationMessage;
+  });
+}
