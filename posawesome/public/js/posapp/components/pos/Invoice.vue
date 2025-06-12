@@ -3151,6 +3151,13 @@ export default {
     evntBus.$on("set_new_line", (data) => {
       this.new_line = data;
     });
+    window.addEventListener("beforeunload", function (e) {
+      if (window.hasUnsavedProducts) {
+        e.preventDefault();
+        e.returnValue = '';
+        return '';
+      }
+    });
   },
   beforeDestroy() {
     evntBus.$off("register_pos_profile");
@@ -3222,7 +3229,22 @@ export default {
         this.additional_discount_percentage = 0;
       }
     },
+    items: {
+      deep: true,
+      handler(items) {
+        window.hasUnsavedProducts = items.length > 0;
+        console.log(' Productos en carrito:', window.hasUnsavedProducts);
+      },
+    },
   },
+  items: {
+  deep: true,
+  handler(items) {
+    this.handelOffers();
+    this.$forceUpdate();
+    window.hasUnsavedProducts = items.length > 0;
+  },
+},
 };
 </script>
 
