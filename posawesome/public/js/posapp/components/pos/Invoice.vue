@@ -3209,13 +3209,6 @@ export default {
         value: this.discount_percentage_offer_name,
       });
     },
-    items: {
-      deep: true,
-      handler(items) {
-        this.handelOffers();
-        this.$forceUpdate();
-      },
-    },
     invoiceType() {
       evntBus.$emit("update_invoice_type", this.invoiceType);
     },
@@ -3232,6 +3225,8 @@ export default {
     items: {
       deep: true,
       handler(items) {
+        this.handelOffers();
+        this.$forceUpdate();
         window.hasUnsavedProducts = items.length > 0;
         console.log(' Productos en carrito:', window.hasUnsavedProducts);
       },
