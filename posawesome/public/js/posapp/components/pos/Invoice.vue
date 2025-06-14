@@ -26,7 +26,39 @@
         </v-card-actions>
       </v-card>
     </v-dialog>
-
+    <v-dialog v-model="pending_amount_auth_dialog" max-width="400" persistent no-click-animation>
+  <v-card>
+    <v-card-title class="text-h5">
+      <span class="headline primary--text">{{ __('Autorización Requerida') }}</span>
+    </v-card-title>
+    <v-card-subtitle v-if="total_price">
+      {{ `Usted cerró la pestaña con una factura en proceso y un monto pendiente de ${total_price}` }}
+    </v-card-subtitle>
+    <v-card-text>
+      <v-text-field
+        v-model="auth_code"
+        :label="__('Ingrese código de autorización')"
+        type="password"
+        hide-details
+        dense
+        outlined
+        color="primary"
+      ></v-text-field>
+      <div
+        v-if="auth_error"
+        style="color: red; font-size: 0.85rem; margin-top: 4px;"
+      >
+        {{ __('Código incorrecto') }}
+      </div>
+    </v-card-text>
+    <v-card-actions>
+      <v-spacer></v-spacer>
+      <v-btn color="success" @click="verifyAuthorization">
+        {{ __('Autorizar') }}
+      </v-btn>
+    </v-card-actions>
+  </v-card>
+</v-dialog>
     <v-dialog v-model="discount_auth_dialog" max-width="330">
       <v-card>
         <v-card-title class="text-h5">
@@ -920,6 +952,10 @@ export default {
       item_discount_dialog: false,
       item_discount_password: "",
       discount_auth_dialog: false,
+      pending_amount_auth_dialog: false,
+      total_price: 0,
+      auth_code: '',
+      auth_error: false,
       discount_password: "",
       show_discount_password_warning: false,
       discount_authorization: false,
@@ -1015,6 +1051,36 @@ export default {
   },
 
   methods: {
+    verifyAuthorization() {
+      if (this.pos_profile.password_manager === this.auth_code) {
+        this.pending_amount_auth_dialog = false;
+        this.auth_error = false;
+
+        const totalPrice = localStorage.getItem('totalPrice');
+        localStorage.removeItem("totalPrice");
+        const args = {
+          amount: totalPrice,
+          pos_opening_shift: this.pos_opening_shift.name,
+          note: "Se cerró la pestaña con una factura en proceso y un monto pendiente de " + totalPrice,
+          type_transaction: "Retiro",
+        };
+
+        frappe.call({
+          method: 'posawesome.posawesome.api.posapp.create_withdrawal_income_draft',
+          args,
+          callback: (r) => {
+            if (!r.exc && r.message.name) {
+              let text = __('Creado exitosamente.');
+            } else {
+              frappe.utils.play_sound('error');
+            }
+          },
+        });
+      } else {
+        this.auth_error = true;
+      }
+    },
+
     open_item_discount_authorization(item) {
       if (!this.is_item_authorized(item)) {
         this.current_item_pending_auth = item;
@@ -1116,6 +1182,12 @@ export default {
       if (idx >= 0) {
         this.expanded.splice(idx, 1);
       }
+
+      if (this.items.length === 0) {
+        localStorage.removeItem("totalPrice");
+      }else{
+        localStorage.setItem("totalPrice", this.Total.toFixed(2));
+      }
     },
 
     add_one(item) {
@@ -1125,6 +1197,8 @@ export default {
       }
       this.calc_stock_qty(item, item.qty);
       this.$forceUpdate();
+
+      localStorage.setItem("totalPrice", this.Total.toFixed(2));
     },
     subtract_one(item) {
       if(item.qty>1){
@@ -1132,6 +1206,8 @@ export default {
         this.calc_stock_qty(item, item.qty);
         this.$forceUpdate();
       }
+
+      localStorage.setItem("totalPrice", this.Total.toFixed(2));
     },
 
     add_item(item) {
@@ -1257,6 +1333,7 @@ export default {
       if (this.pos_profile.password_manager === password) {
         this.show_invalid_password_warning = false; // Oculta el mensaje si es correcto
         this.cancel_invoice();
+        localStorage.removeItem("totalPrice");
       } else {
         this.show_invalid_password_warning = true; // Muestra el mensaje si es incorrecto
         this.$toast?.error?.("Código incorrecto");
@@ -1663,6 +1740,7 @@ export default {
       if (!this.validate()) {
         return;
       }
+      localStorage.removeItem("totalPrice");
       if (this.invoice_doc.doctype == "Sales Order") {
         evntBus.$emit("show_payment", "true");
         const invoice_doc = await this.process_invoice_from_order();
@@ -3095,6 +3173,14 @@ export default {
       this.invoiceType = this.pos_profile.posa_default_sales_order
         ? "Order"
         : "Invoice";
+      
+      const totalPrice = localStorage.getItem('totalPrice');
+      if (totalPrice && parseFloat(totalPrice) > 0) {
+        this.total_price = totalPrice;
+        if(this.pos_profile.secure_mode){
+          this.pending_amount_auth_dialog = true;
+        }
+      }
     });
     evntBus.$on("add_item", (item) => {
       this.add_item(item);

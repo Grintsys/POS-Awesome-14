@@ -22,6 +22,16 @@ class POSClosingShift(Document):
                 f"No se puede cerrar la caja porque hay facturas en estado 'Borrador' asociadas al turno.\n\nFacturas: {invoice_list}\n\nPor favor, totalice antes de cerrar la caja."
             ))
 
+        draft_withdrawals = frappe.get_all("Retiro de efectivo", filters={
+            "pos_opening_shift": self.pos_opening_shift,
+            "docstatus": 0
+        }, fields=["name"])
+        if draft_withdrawals:
+            draft_withdrawals_list = ", ".join([inv["name"] for inv in draft_withdrawals])
+            frappe.throw(_(
+                f"No se puede cerrar la caja porque hay retiros de efectivo en estado 'Borrador' asociadas al turno.\n\nRetiros: {draft_withdrawals_list}\n\nPor favor, totalice antes de cerrar la caja."
+            ))
+
         user = frappe.get_all(
             "POS Closing Shift",
             filters={

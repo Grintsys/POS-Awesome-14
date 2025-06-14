@@ -328,6 +328,7 @@ export default {
       return items_headers;
     },
     add_item(item) {
+
       item = { ...item };
       if (item.has_variants) {
         evntBus.$emit("open_variants_model", item, this.items);
@@ -335,6 +336,12 @@ export default {
         if (!item.qty || item.qty === 1) {
           item.qty = Math.abs(this.qty);
         }
+
+        const storedPrice = localStorage.getItem("totalPrice");
+        const currentTotal = storedPrice ? parseFloat(storedPrice) : 0;
+        const newTotal = currentTotal + (parseFloat(item.rate) || 0);
+        localStorage.setItem("totalPrice", newTotal.toFixed(2));
+
         evntBus.$emit("add_item", item);
         this.qty = 1;
       }
