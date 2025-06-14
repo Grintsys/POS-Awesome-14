@@ -13,7 +13,7 @@ import POS from './components/pos/Pos.vue';
 import Payments from './components/payments/Pay.vue';
 
 export default {
-  data: function () {
+  data() {
     return {
       page: 'POS',
     };
@@ -33,32 +33,13 @@ export default {
         $('.navbar.navbar-default.navbar-fixed-top').remove();
       });
     },
-
-    // 👉 INICIO código agregado: advertencia al cerrar o recargar
-    handleBeforeUnload(e) {
-      if (cur_pos && cur_pos.doc && cur_pos.doc.items && cur_pos.doc.items.length > 0) {
-        const confirmationMessage = "⚠️ Hay una venta activa. ¿Seguro que deseas salir?";
-        e.preventDefault();
-        e.returnValue = confirmationMessage;
-        return confirmationMessage;
-      }
-    },
-    // 👉 FIN código agregado
   },
   mounted() {
     this.remove_frappe_nav();
-
-    // 👉 INICIO código agregado: conectar evento beforeunload
-    window.addEventListener('beforeunload', this.handleBeforeUnload);
-    // 👉 FIN código agregado
   },
-  beforeDestroy() {
-    // 👉 INICIO código agregado: desconectar evento beforeunload
-    window.removeEventListener('beforeunload', this.handleBeforeUnload);
-    // 👉 FIN código agregado
-  },
+  beforeDestroy() {},
   updated() {},
-  created: function () {
+  created() {
     setTimeout(() => {
       this.remove_frappe_nav();
     }, 1000);
