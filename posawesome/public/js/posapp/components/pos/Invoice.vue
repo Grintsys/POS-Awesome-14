@@ -1062,7 +1062,7 @@ export default {
           amount: totalPrice,
           pos_opening_shift: this.pos_opening_shift.name,
           note: "Se cerró la pestaña con una factura en proceso y un monto pendiente de " + totalPrice,
-          type_transaction: "Retiro",
+          type_transaction: "Ingreso",
         };
 
         frappe.call({
