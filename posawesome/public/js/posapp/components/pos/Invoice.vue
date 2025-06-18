@@ -3173,12 +3173,43 @@ export default {
       this.invoiceType = this.pos_profile.posa_default_sales_order
         ? "Order"
         : "Invoice";
-      
-      const totalPrice = localStorage.getItem('totalPrice');
-      if (totalPrice && parseFloat(totalPrice) > 0) {
+
+      if(this.pos_profile.secure_mode){
+        const totalPrice = localStorage.getItem('totalPrice');
+
         this.total_price = totalPrice;
-        if(this.pos_profile.secure_mode){
-          this.pending_amount_auth_dialog = true;
+
+        const TAB_KEY = 'active_secure_tab';
+
+        // Si ya existe otra pestaña activa
+        if (localStorage.getItem(TAB_KEY)) {
+          alert('Ya hay otra pestaña del punto de venta activa. Esta se cerrará.');
+          window.location.href = 'about:blank'; // o window.location.href = 'about:blank';
+        } else {
+          // Marcar esta pestaña como activa
+          localStorage.setItem(TAB_KEY, Date.now().toString());
+
+          // Si todo está bien, mostrar tu diálogo
+          if (totalPrice && parseFloat(totalPrice) > 0) {
+            this.total_price = totalPrice;
+
+            this.pending_amount_auth_dialog = true;
+
+            this.total_price = totalPrice;
+          }
+
+          // Eliminar la marca cuando se cierre la pestaña
+          window.addEventListener('beforeunload', () => {
+            localStorage.removeItem(TAB_KEY);
+          });
+
+          // Escuchar si otra pestaña cambia la clave
+          window.addEventListener('storage', (event) => {
+            if (event.key === TAB_KEY && event.newValue) {
+              alert('Ya hay otra pestaña del punto de venta activa. Esta se cerrará.');
+              window.close();
+            }
+          });
         }
       }
     });
