@@ -183,6 +183,16 @@ def make_closing_shift_from_opening(opening_shift):
             f"No se puede cerrar la caja porque hay facturas en estado 'Borrador' asociadas al turno.\n\nFacturas: {invoice_list}\n\nPor favor, totalice o elimine estas facturas antes de cerrar la caja."
         ))
 
+    draft_withdrawals = frappe.get_all("Retiro de efectivo", filters={
+        "pos_opening_shift": opening_shift.get("name"),
+        "docstatus": 0
+    }, fields=["name"])
+    if draft_withdrawals:
+        draft_withdrawals_list = ", ".join([inv["name"] for inv in draft_withdrawals])
+        frappe.throw(_(
+            f"No se puede cerrar la caja porque hay 'Retiros de efectivo' en estado 'Borrador' asociadas al turno.\n\nRetiros: {draft_withdrawals_list}\n\nPor favor, totalice o elimine los Retiros de Efectivo antes de cerrar la caja.."
+        ))
+        
     submit_printed_invoices(opening_shift.get("name"))
     closing_shift = frappe.new_doc("POS Closing Shift")
     closing_shift.pos_opening_shift = opening_shift.get("name")
