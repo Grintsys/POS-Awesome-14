@@ -1066,7 +1066,7 @@ export default {
         };
 
         frappe.call({
-          method: 'posawesome.posawesome.api.posapp.create_withdrawal_income_draft',
+          method: 'posawesome.posawesome.api.posapp.create_withdrawal_income',
           args,
           callback: (r) => {
             if (!r.exc && r.message.name) {
