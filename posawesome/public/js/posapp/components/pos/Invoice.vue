@@ -3178,8 +3178,8 @@ export default {
         const totalPrice = localStorage.getItem('totalPrice');
 
         this.total_price = totalPrice;
-
-        const TAB_KEY = 'active_secure_tab';
+        //const TAB_KEY = 'active_secure_tab';
+        const TAB_KEY = `active_secure_tab_${this.pos_profile.name}`; // ← clave única por perfil POS
 
         // Si ya existe otra pestaña activa
         if (localStorage.getItem(TAB_KEY)) {
@@ -3194,8 +3194,7 @@ export default {
             this.total_price = totalPrice;
 
             this.pending_amount_auth_dialog = true;
-
-            this.total_price = totalPrice;
+            
           }
 
           // Eliminar la marca cuando se cierre la pestaña
