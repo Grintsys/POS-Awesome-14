@@ -160,6 +160,10 @@ export default {
         )
         .then((r) => {
           if (r.message) {
+            const TAB_KEY = `active_secure_tab_${this.pos_profile.name}`;
+            localStorage.removeItem(TAB_KEY); // ← Esto evita conflictos futuros
+            localStorage.removeItem('totalPrice'); // ← Limpieza de precios pendientes, si aplica
+
             evntBus.$emit('show_mesage', {
               text: `POS Shift Closed`,
               color: 'success',
