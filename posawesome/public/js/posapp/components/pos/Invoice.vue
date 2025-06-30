@@ -3189,13 +3189,13 @@ export default {
           // Marcar esta pestaña como activa
           localStorage.setItem(TAB_KEY, Date.now().toString());
 
-          // Si todo está bien, mostrar tu diálogo
-          if (totalPrice && parseFloat(totalPrice) > 0) {
-            this.total_price = totalPrice;
+          if(this.pos_profile.create_vale){
+            if (totalPrice && parseFloat(totalPrice) > 0) {
+              this.total_price = totalPrice;
 
-            this.pending_amount_auth_dialog = true;
-            
-          }
+              this.pending_amount_auth_dialog = true;
+            }
+          }          
 
           // Eliminar la marca cuando se cierre la pestaña
           window.addEventListener('beforeunload', () => {
@@ -3209,6 +3209,16 @@ export default {
               window.close();
             }
           });
+        }
+      }else{
+        if(this.pos_profile.create_vale){
+          const totalPrice = localStorage.getItem('totalPrice');
+
+          if (totalPrice && parseFloat(totalPrice) > 0) {
+              this.total_price = totalPrice;
+
+              this.pending_amount_auth_dialog = true;    
+          }
         }
       }
     });
