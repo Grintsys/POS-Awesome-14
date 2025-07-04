@@ -18,9 +18,10 @@
  "fields": [
   {
    "fieldname": "type",
-   "fieldtype": "Data",
+   "fieldtype": "Select",
    "in_list_view": 1,
    "label": "Tipo",
+   "options": "Monto pendiente\nCancelar Factura\nEliminar Producto\nDescuento Factura\nDescuento Producto",
    "reqd": 1
   },
   {
@@ -36,7 +37,7 @@
    "fieldtype": "Data",
    "in_list_view": 1,
    "label": "Usuario",
-   "reqd": 1
+   "read_only": 1
   },
   {
    "fieldname": "amount",
@@ -63,7 +64,7 @@
  "index_web_pages_for_search": 1,
  "is_submittable": 1,
  "links": [],
- "modified": "2025-06-30 17:35:49.374668",
+ "modified": "2025-07-03 20:18:29.749365",
  "modified_by": "Administrator",
  "module": "POSAwesome",
  "name": "Historial de autorizaciones en POS",

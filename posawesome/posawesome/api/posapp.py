@@ -1121,6 +1121,24 @@ def create_withdrawal_income(
     return register
 
 @frappe.whitelist()
+def create_history_authorization(
+    type,
+    pos_profile,
+    amount
+):
+    register = frappe.get_doc(
+        {
+            "doctype": "Historial de autorizaciones en POS",
+            "type": type,
+            "pos_profile": pos_profile,
+            "amount": amount
+        }
+    )
+    register.insert()
+    register.submit() 
+    return register
+
+@frappe.whitelist()
 def create_withdrawal_income_draft(
     amount,
     pos_opening_shift,

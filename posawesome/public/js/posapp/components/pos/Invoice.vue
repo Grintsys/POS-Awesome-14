@@ -1058,6 +1058,9 @@ export default {
 
         const totalPrice = localStorage.getItem('totalPrice');
         localStorage.removeItem("totalPrice");
+
+        this.history_auth("Monto pendiente", totalPrice);
+
         const args = {
           amount: totalPrice,
           pos_opening_shift: this.pos_opening_shift.name,
@@ -1095,6 +1098,7 @@ export default {
       if (this.item_discount_password === this.pos_profile.password_manager) {
         this.item_discount_authorization_items.push(this.current_item_pending_auth);
         this.item_discount_dialog = false;
+        this.history_auth("Descuento Producto", 0);
       } else {
         this.$toast?.error?.("Código incorrecto");
       }
@@ -1118,6 +1122,7 @@ export default {
           // da foco al campo después de autorizar
           this.$refs.percentage_discount?.focus();
         });
+        this.history_auth("Descuento Factura", 0);
         this.closeDiscountDialog();
       } else {
         this.show_discount_password_warning = true;
@@ -1129,6 +1134,26 @@ export default {
       this.discount_auth_dialog = false;
       this.discount_password = "";
       this.show_discount_password_warning = false;
+    },
+
+    history_auth(type, amount) {
+      const args = {
+          type: type,
+          pos_profile: this.pos_profile.name,
+          amount: amount
+        };
+
+        frappe.call({
+          method: 'posawesome.posawesome.api.posapp.create_history_authorization',
+          args,
+          callback: (r) => {
+            if (!r.exc && r.message.name) {
+              let text = __('Historial de autorización creado exitosamente.');
+            } else {
+              frappe.utils.play_sound('error');
+            }
+          },
+        });
     },
 
     onQtyChange(item, value) {
@@ -1163,6 +1188,7 @@ export default {
       if (this.pos_profile.password_manager === this.remove_password) {
         this.removeSelectedItem(this.item_to_remove);
         this.closeRemoveDialog();
+        this.history_auth("Eliminar Producto", 0);
       } else {
         this.show_remove_password_warning = true;
         this.$toast?.error?.("Código incorrecto");
@@ -1333,6 +1359,7 @@ export default {
       if (this.pos_profile.password_manager === password) {
         this.show_invalid_password_warning = false; // Oculta el mensaje si es correcto
         this.cancel_invoice();
+        this.history_auth("Cancelar Factura", this.Total);
         localStorage.removeItem("totalPrice");
       } else {
         this.show_invalid_password_warning = true; // Muestra el mensaje si es incorrecto
