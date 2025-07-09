@@ -959,6 +959,7 @@ export default {
       discount_password: "",
       show_discount_password_warning: false,
       discount_authorization: false,
+      total_cancel: 0,
       remove_dialog: false,
       remove_password: "",
       show_remove_password_warning: false,
@@ -1039,6 +1040,7 @@ export default {
       });
       sum -= this.flt(this.discount_amount);
       sum += this.flt(this.delivery_charges_rate);
+      total_cancel = this.flt(sum, this.currency_precision);
       return this.flt(sum, this.currency_precision);
     },
     total_items_discount_amount() {
@@ -1187,8 +1189,9 @@ export default {
 
       if (this.pos_profile.password_manager === this.remove_password) {
         this.removeSelectedItem(this.item_to_remove);
+        let price_item = this.item_to_remove.price_list_rate * this.item_to_remove.qty
+        this.history_auth("Eliminar Producto", price_item);
         this.closeRemoveDialog();
-        this.history_auth("Eliminar Producto", 0);
       } else {
         this.show_remove_password_warning = true;
         this.$toast?.error?.("Código incorrecto");
@@ -1358,9 +1361,12 @@ export default {
 
       if (this.pos_profile.password_manager === password) {
         this.show_invalid_password_warning = false; // Oculta el mensaje si es correcto
-        this.cancel_invoice();
-        this.history_auth("Cancelar Factura", this.Total);
+        this.items.forEach((item) => {
+          this.total_cancel += item.rate;
+        });
+        this.history_auth("Cancelar Factura", this.total_cancel);
         localStorage.removeItem("totalPrice");
+        this.cancel_invoice();
       } else {
         this.show_invalid_password_warning = true; // Muestra el mensaje si es incorrecto
         this.$toast?.error?.("Código incorrecto");
