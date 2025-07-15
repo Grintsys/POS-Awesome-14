@@ -302,7 +302,7 @@
               :label="frappe._('Rounded Total')"
               background-color="white"
               hide-details
-              :value="formtCurrency(invoice_doc.rounded_total)"
+              :value="formtCurrency(pos_profile.disable_rounded_total ? invoice_doc.grand_total : invoice_doc.rounded_total)"
               disabled
               :prefix="currencySymbol(invoice_doc.currency)"
             ></v-text-field>
