@@ -77,7 +77,10 @@
                   </v-list-item-content>
                 </v-list-item>
                 <v-divider class="my-0"></v-divider>
-                <v-list-item @click="logOut">
+                <v-list-item @click="logOut"
+                v-if="
+                    pos_profile.allow_logout
+                  ">
                   <v-list-item-icon>
                     <v-icon>mdi-logout</v-icon>
                   </v-list-item-icon>

@@ -7,12 +7,14 @@
         </v-card-title>
         <v-card-text>
           <v-text-field
+            autofocus
             v-model="item_discount_password"
             :label="__('Enter Authorization Code')"
             type="password"
             dense
             outlined
             color="primary"
+            @keydown.enter="confirm_item_discount_authorization"
           />
         </v-card-text>
         <v-card-actions>
@@ -36,6 +38,7 @@
     </v-card-subtitle>
     <v-card-text>
       <v-text-field
+        autofocus
         v-model="auth_code"
         :label="__('Ingrese código de autorización')"
         type="password"
@@ -43,6 +46,7 @@
         dense
         outlined
         color="primary"
+        @keydown.enter="verifyAuthorization"
       ></v-text-field>
       <div
         v-if="auth_error"
@@ -67,6 +71,7 @@
 
         <v-card-text>
           <v-text-field
+            autofocus
             v-model="discount_password"
             :label="__('Ingrese código de autorización')"
             type="password"
@@ -74,6 +79,7 @@
             dense
             outlined
             color="warning"
+            @keydown.enter="authorize_discount"
           ></v-text-field>
 
           <div
@@ -101,6 +107,7 @@
 
         <v-card-text>
           <v-text-field
+            autofocus
             v-model="remove_password"
             :label="__('Ingrese código de autorización')"
             type="password"
@@ -108,6 +115,7 @@
             dense
             outlined
             color="primary"
+            @keydown.enter="authorization_remove_item"
           ></v-text-field>
 
           <div
@@ -138,6 +146,7 @@
         </v-card-title>
         <v-card-text>
           <v-text-field
+            autofocus
             v-model="cancel_password"
             :label="__('Ingrese código de autorización')"
             type="password"
@@ -145,6 +154,7 @@
             dense
             outlined
             color="primary"
+            @keydown.enter="authorization_cancel_invoice(cancel_password)"
           ></v-text-field>
           <div
             v-if="show_invalid_password_warning"
@@ -2369,6 +2379,13 @@ export default {
       }
     },
 
+    shortRealoadInvoice(e) {
+      if (e.key === "k" && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault();
+        this.cancel_dialog = true;
+      }
+    },
+
     shortDeleteFirstItem(e) {
       if (e.key === "d" && (e.ctrlKey || e.metaKey)) {
         e.preventDefault();
@@ -3334,20 +3351,23 @@ export default {
     document.addEventListener("keydown", this.shortDeleteFirstItem.bind(this));
     document.addEventListener("keydown", this.shortOpenFirstItem.bind(this));
     document.addEventListener("keydown", this.shortSelectDiscount.bind(this));
+    document.addEventListener("keydown", this.shortRealoadInvoice.bind(this));
   },
   destroyed() {
     document.removeEventListener("keydown", this.shortOpenPayment);
     document.removeEventListener("keydown", this.shortDeleteFirstItem);
     document.removeEventListener("keydown", this.shortOpenFirstItem);
     document.removeEventListener("keydown", this.shortSelectDiscount);
+    document.removeEventListener("keydown", this.shortRealoadInvoice);
   },
   watch: {
     cancel_dialog(newVal) {
       if (!newVal) {
         this.cancel_password = "";
         this.show_invalid_password_warning = false;
-      }
+      };
     },
+
     customer() {
       this.close_payments();
       evntBus.$emit("set_customer", this.customer);

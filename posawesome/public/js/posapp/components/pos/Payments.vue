@@ -974,6 +974,12 @@ export default {
         this.submit(undefined, false, true);
       }
     },
+    shortRealoadInvoice(e) {
+      if (e.key === "q" && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault();
+        this.back_to_invoice()
+      }
+    },
     set_paid_change() {
       if (!this.paid_change) this.paid_change = 0;
 
@@ -1257,9 +1263,7 @@ export default {
     total_payments() {
       let total = parseFloat(this.invoice_doc.loyalty_amount);
       if (this.invoice_doc && this.invoice_doc.payments) {
-        this.invoice_doc.payments.forEach((payment) => {
-          total += this.flt(payment.amount);
-        });
+        total = this.invoice_doc.grand_total;
       }
 
       total += this.flt(this.redeemed_customer_credit);
@@ -1407,6 +1411,7 @@ export default {
   created() {
     document.addEventListener("keydown", this.shortPay.bind(this));
     document.addEventListener("keydown", this.payAndPrint.bind(this));
+    document.addEventListener("keydown", this.shortRealoadInvoice.bind(this));
   },
   beforeDestroy() {
     evntBus.$off("send_invoice_doc_payment");
@@ -1423,6 +1428,7 @@ export default {
   destroyed() {
     document.removeEventListener("keydown", this.shortPay);
     document.removeEventListener("keydown", this.payAndPrint);
+    document.removeEventListener("keydown", this.shortRealoadInvoice);
   },
 
   watch: {
