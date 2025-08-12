@@ -402,14 +402,12 @@
                       background-color="white"
                       hide-details
                       :value="formtFloat(item.qty)"
-                      @change="
-                        [
-                          onQtyChange(item, $event),
-                        ]
-                      "
+                      @change="[ onQtyChange(item, $event) ]"
+                      @keydown.enter.prevent="onQtyEnter(item, $event)"   
+                      ref="qtyInput"                                      
                       :rules="[isNumber]"
                       :disabled="!!item.posa_is_offer || !!item.posa_is_replace"
-                    ></v-text-field>
+                    /></v-text-field>
                   </v-col>
                   <v-col cols="4">
                     <v-select
@@ -1177,6 +1175,17 @@ export default {
 
       this.setFormatedFloat(item, 'qty', null, false, qty);
       this.calc_stock_qty(item, qty);
+    },
+
+    onQtyEnter(item, evt) {
+      // Tomamos el valor que el usuario tiene en el input
+      const val = evt && evt.target ? evt.target.value : item.qty;
+      // Reutilizamos tu lógica actual de cambio de cantidad
+      this.onQtyChange(item, val);
+      // Regresar el foco a la barra de búsqueda
+      this.$nextTick(() => {
+        evntBus.$emit("focus-search");
+      });
     },
 
     remove_item(item) {
@@ -2394,10 +2403,26 @@ export default {
     },
 
     shortOpenFirstItem(e) {
-      if (e.key === "a" && (e.ctrlKey || e.metaKey)) {
+      const isA = e.key === "a" || e.key === "A";
+      const hasCtrlOrMeta = e.ctrlKey || e.metaKey; // Ctrl (Win/Linux) o ⌘ (Mac)
+      const hasShift = e.shiftKey;
+
+      if (isA && hasCtrlOrMeta && hasShift) {
         e.preventDefault();
-        this.expanded = [];
-        this.expanded.push(this.items[0]);
+        if (!this.items || !this.items.length) return;
+
+        // Expandir solo el primero
+        this.expanded = [this.items[0]];
+
+        // Enfocar QTY cuando termine de renderizar
+        this.$nextTick(() => {
+          const r = this.$refs.qtyInput;
+          const el = r && r.$el ? r.$el.querySelector("input") : r;
+          if (el && el.focus) {
+            el.focus();
+            if (el.select) el.select();
+          }
+        });
       }
     },
 

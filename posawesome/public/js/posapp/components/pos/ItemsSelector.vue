@@ -210,6 +210,16 @@ export default {
   },
 
   methods: {
+    focusSearchInput() {
+      this.$nextTick(() => {
+        const comp = this.$refs.debounce_search;
+        const el = comp && comp.$el ? comp.$el.querySelector("input") : comp;
+        if (el && el.focus) {
+          el.focus();
+          if (el.select) el.select();
+        }
+      });
+    },
     show_offers() {
       evntBus.$emit("show_offers", "true");
     },
@@ -678,6 +688,11 @@ export default {
 
   mounted() {
     this.scan_barcoud();
+    evntBus.$on("focus-search", this.focusSearchInput);
+  },
+
+  beforeDestroy() {
+    evntBus.$off("focus-search", this.focusSearchInput); // NUEVO: limpieza del listener
   },
 };
 </script>
