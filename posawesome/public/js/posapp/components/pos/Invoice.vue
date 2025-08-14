@@ -1178,11 +1178,15 @@ export default {
     },
 
     onQtyEnter(item, evt) {
-      // Tomamos el valor que el usuario tiene en el input
       const val = evt && evt.target ? evt.target.value : item.qty;
-      // Reutilizamos tu lógica actual de cambio de cantidad
+
+      // 1) Guardar la cantidad (tu lógica existente)
       this.onQtyChange(item, val);
-      // Regresar el foco a la barra de búsqueda
+
+      // 2) Cerrar el panel/ítem expandido
+      this.expanded = [];
+
+      // 3) Después del re-render, regresar el foco al buscador
       this.$nextTick(() => {
         evntBus.$emit("focus-search");
       });
