@@ -581,9 +581,16 @@ export default {
                   let element_regex = new RegExp(
                     `.*${element.split("").join(".*")}.*`
                   );
-                  if (element_regex.test(item.item_name.toLowerCase())) {
-                    found = true;
-                    break;
+                  if(this.pos_profile.strict_search){
+                    if (element === item.item_name.toLowerCase() || element === item.item_code.toLowerCase()) {
+                      found = true;
+                      break;
+                    }
+                  }else{
+                    if (element_regex.test(item.item_name.toLowerCase())) {
+                      found = true;
+                      break;
+                    }
                   }
                 }
                 return found;
