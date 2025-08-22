@@ -20,6 +20,7 @@
             outlined
             color="primary"
             :label="frappe._('Search Items')"
+            :placeholder="strict_search ? 'Prefijo (Enter) | %texto para búsqueda amplia' : 'Buscar por código, nombre, serie, lote o código de barras'"
             hint="Search by item code, serial number, batch no or barcode"
             background-color="white"
             hide-details
@@ -182,7 +183,7 @@ export default {
     items: [],
     search: "",
     first_search: "",
-    itemsPerPage: 1000,
+    itemsPerPage: 100,
     offersCount: 0,
     appliedOffersCount: 0,
     couponsCount: 0,
@@ -191,6 +192,8 @@ export default {
     customer: null,
     new_line: false,
     qty: 1,
+    // NUEVO: flag local (lo sincronizamos desde POS Profile)
+    strict_search: false,
   }),
 
   watch: {
@@ -210,6 +213,15 @@ export default {
   },
 
   methods: {
+    // === NUEVO: normalización para ignorar mayúsculas y acentos ===
+    normalizeText(s) {
+      return (s || "")
+        .toString()
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, ""); // quita diacríticos
+    },
+
     focusSearchInput() {
       this.$nextTick(() => {
         const comp = this.$refs.debounce_search;
@@ -542,18 +554,59 @@ export default {
   computed: {
     filtred_items() {
       this.search = this.get_search(this.first_search);
+
       if (!this.pos_profile.pose_use_limit_search) {
         let filtred_list = [];
         let filtred_group_list = [];
+
+        // Filtrar por grupo
         if (this.item_group != "ALL") {
           filtred_group_list = this.items.filter((item) =>
-            item.item_group
-              .toLowerCase()
-              .includes(this.item_group.toLowerCase())
+            item.item_group.toLowerCase().includes(this.item_group.toLowerCase())
           );
         } else {
           filtred_group_list = this.items;
         }
+
+        // === NUEVO: MODO ESTRICTO (prefijo) si no hay '%' ===
+        const raw = (this.search || "").toString();
+        const hasPercent = raw.includes("%");
+        const strict = !!(this.pos_profile && this.pos_profile.strict_search);
+
+        if (strict && raw && !hasPercent) {
+          const q = this.normalizeText(raw);
+
+          filtred_list = filtred_group_list.filter((item) => {
+            const name = this.normalizeText(item.item_name);
+            const code = this.normalizeText(item.item_code);
+            const desc = this.normalizeText(item.description || "");
+            const anyBarcodeStarts = Array.isArray(item.item_barcode)
+              ? item.item_barcode.some((b) =>
+                  this.normalizeText(b.barcode || "").startsWith(q)
+                )
+              : false;
+
+            return (
+              anyBarcodeStarts ||
+              name.startsWith(q) ||
+              code.startsWith(q) ||
+              desc.startsWith(q)
+            );
+          });
+
+          // Mantén límites/ocultar variantes como antes
+          if (
+            this.pos_profile.posa_show_template_items &&
+            this.pos_profile.posa_hide_variants_items
+          ) {
+            return filtred_list.filter((item) => !item.variant_of).slice(0, 50);
+          } else {
+            return filtred_list.slice(0, 50);
+          }
+        }
+        // === FIN ESTRICTO ===
+
+        // --- Lógica existente (clásica / contiene) ---
         if (!this.search || this.search.length < 3) {
           if (
             this.pos_profile.posa_show_template_items &&
@@ -566,6 +619,7 @@ export default {
             return (filtred_list = filtred_group_list.slice(0, 50));
           }
         } else if (this.search) {
+          // 1) Coincidencia exacta por código de barras
           filtred_list = filtred_group_list.filter((item) => {
             let found = false;
             for (let element of item.item_barcode) {
@@ -576,11 +630,15 @@ export default {
             }
             return found;
           });
+
           if (filtred_list.length == 0) {
+            // 2) Por item_code (contains)
             filtred_list = filtred_group_list.filter((item) =>
               item.item_code.toLowerCase().includes(this.search.toLowerCase())
             );
+
             if (filtred_list.length == 0) {
+              // 3) Por combinaciones “difusas” (lógica existente)
               const search_combinations = this.generateWordCombinations(
                 this.search
               );
@@ -591,12 +649,17 @@ export default {
                   let element_regex = new RegExp(
                     `.*${element.split("").join(".*")}.*`
                   );
-                  if(this.pos_profile.strict_search){
-                    if (element === item.item_name.toLowerCase() || element === item.item_code.toLowerCase()) {
+                  if (this.pos_profile.strict_search) {
+                    // NOTA: aquí antes pedía igualdad; lo mantenemos por compatibilidad,
+                    // pero ya no entra cuando strict sin % por la rama de prefijo de arriba.
+                    if (
+                      element === item.item_name.toLowerCase() ||
+                      element === item.item_code.toLowerCase()
+                    ) {
                       found = true;
                       break;
                     }
-                  }else{
+                  } else {
                     if (element_regex.test(item.item_name.toLowerCase())) {
                       found = true;
                       break;
@@ -606,6 +669,8 @@ export default {
                 return found;
               });
             }
+
+            // 4) Serial no (si aplica)
             if (
               filtred_list.length == 0 &&
               this.pos_profile.posa_search_serial_no
@@ -623,6 +688,8 @@ export default {
                 return found;
               });
             }
+
+            // 5) Batch no (si aplica)
             if (
               filtred_list.length == 0 &&
               this.pos_profile.posa_search_batch_no
@@ -642,6 +709,7 @@ export default {
             }
           }
         }
+
         if (
           this.pos_profile.posa_show_template_items &&
           this.pos_profile.posa_hide_variants_items
@@ -668,6 +736,9 @@ export default {
     this.$nextTick(function () {});
     evntBus.$on("register_pos_profile", (data) => {
       this.pos_profile = data.pos_profile;
+      // NUEVO: sincroniza el flag local desde el perfil recibido
+      this.strict_search = !!(data.pos_profile && data.pos_profile.strict_search);
+
       this.get_items();
       this.get_items_groups();
       this.items_view = this.pos_profile.posa_default_card_view
@@ -700,7 +771,7 @@ export default {
 
   beforeDestroy() {
     evntBus.$off("focus-search", this.focusSearchInput); // NUEVO: limpieza del listener
-  },
+  }
 };
 </script>
 
