@@ -20,7 +20,7 @@
             outlined
             color="primary"
             :label="frappe._('Search Items')"
-            :placeholder="strict_search ? 'Prefijo (Enter) | %texto para búsqueda amplia' : 'Buscar por código, nombre, serie, lote o código de barras'"
+            :placeholder="strict_search ? 'Buscar (Enter) | %texto para búsqueda amplia' : 'Buscar por código, nombre, serie, lote o código de barras'"
             hint="Search by item code, serial number, batch no or barcode"
             background-color="white"
             hide-details
@@ -171,8 +171,10 @@
 import { evntBus } from "../../bus";
 import format from "../../format";
 import _ from "lodash";
+
 export default {
   mixins: [format],
+
   data: () => ({
     pos_profile: "",
     flags: {},
@@ -192,7 +194,7 @@ export default {
     customer: null,
     new_line: false,
     qty: 1,
-    // NUEVO: flag local (lo sincronizamos desde POS Profile)
+    // bandera local que sincronizamos desde POS Profile
     strict_search: false,
   }),
 
@@ -213,15 +215,34 @@ export default {
   },
 
   methods: {
-    // === NUEVO: normalización para ignorar mayúsculas y acentos ===
-    normalizeText(s) {
-      return (s || "")
+    // === Helpers para búsqueda estricta (prefijo) ===
+    normalize(str) {
+      return (str || "")
         .toString()
-        .toLowerCase()
         .normalize("NFD")
-        .replace(/[\u0300-\u036f]/g, ""); // quita diacríticos
+        .replace(/\p{Diacritic}/gu, "") // quita acentos
+        .toLowerCase()
+        .trim();
+    },
+    startsWithAnyField(item, normTerm) {
+      if (!item) return false;
+      const fields = [item.item_code, item.item_name, item.description];
+
+      // barcodes
+      if (Array.isArray(item.item_barcode)) {
+        for (const b of item.item_barcode) {
+          if (b?.barcode && this.normalize(b.barcode).startsWith(normTerm)) {
+            return true;
+          }
+        }
+      }
+      for (const f of fields) {
+        if (this.normalize(f).startsWith(normTerm)) return true;
+      }
+      return false;
     },
 
+    // === Métodos existentes ===
     focusSearchInput() {
       this.$nextTick(() => {
         const comp = this.$refs.debounce_search;
@@ -327,18 +348,8 @@ export default {
     },
     getItmesHeaders() {
       const items_headers = [
-        {
-          text: __("Name"),
-          align: "start",
-          sortable: true,
-          value: "item_name",
-        },
-        {
-          text: __("Code"),
-          align: "start",
-          sortable: true,
-          value: "item_code",
-        },
+        { text: __("Name"), align: "start", sortable: true, value: "item_name" },
+        { text: __("Code"), align: "start", sortable: true, value: "item_code" },
         { text: __("Rate"), value: "rate", align: "start" },
         { text: __("Available QTY"), value: "actual_qty", align: "start" },
         { text: __("UOM"), value: "stock_uom", align: "start" },
@@ -346,11 +357,9 @@ export default {
       if (!this.pos_profile.posa_display_item_code) {
         items_headers.splice(1, 1);
       }
-
       return items_headers;
     },
     add_item(item) {
-
       item = { ...item };
       if (item.has_variants) {
         evntBus.$emit("open_variants_model", item, this.items);
@@ -473,7 +482,6 @@ export default {
       this.$refs.debounce_search.focus();
     },
     update_items_details(items) {
-      // set debugger
       const vm = this;
       frappe.call({
         method: "posawesome.posawesome.api.posapp.get_items_details",
@@ -529,10 +537,7 @@ export default {
     },
     generateWordCombinations(inputString) {
       const words = inputString.split(" ");
-      const wordCount = words.length;
       const combinations = [];
-
-      // Helper function to generate all permutations
       function permute(arr, m = []) {
         if (arr.length === 0) {
           combinations.push(m.join(" "));
@@ -544,17 +549,44 @@ export default {
           }
         }
       }
-
       permute(words);
-
       return combinations;
     },
   },
 
   computed: {
     filtred_items() {
+      // Normaliza el término que llega del input
       this.search = this.get_search(this.first_search);
 
+      // === MODO ESTRICTO (prefijo) SI NO HAY '%' ===
+      const raw = (this.search || "").toString();
+      const hasPercent = raw.includes("%");
+      const strict = !!this.strict_search;
+
+      if (strict && raw && !hasPercent) {
+        const normTerm = this.normalize(raw);
+        const inGroup =
+          this.item_group != "ALL"
+            ? this.items.filter((it) =>
+                (it.item_group || "")
+                  .toLowerCase()
+                  .includes(this.item_group.toLowerCase())
+              )
+            : this.items;
+
+        let list = inGroup.filter((it) => this.startsWithAnyField(it, normTerm));
+
+        if (
+          this.pos_profile.posa_show_template_items &&
+          this.pos_profile.posa_hide_variants_items
+        ) {
+          list = list.filter((it) => !it.variant_of);
+        }
+        return list.slice(0, 50);
+      }
+
+      // === LÓGICA EXISTENTE (clásica / contiene) ===
       if (!this.pos_profile.pose_use_limit_search) {
         let filtred_list = [];
         let filtred_group_list = [];
@@ -568,45 +600,6 @@ export default {
           filtred_group_list = this.items;
         }
 
-        // === NUEVO: MODO ESTRICTO (prefijo) si no hay '%' ===
-        const raw = (this.search || "").toString();
-        const hasPercent = raw.includes("%");
-        const strict = !!(this.pos_profile && this.pos_profile.strict_search);
-
-        if (strict && raw && !hasPercent) {
-          const q = this.normalizeText(raw);
-
-          filtred_list = filtred_group_list.filter((item) => {
-            const name = this.normalizeText(item.item_name);
-            const code = this.normalizeText(item.item_code);
-            const desc = this.normalizeText(item.description || "");
-            const anyBarcodeStarts = Array.isArray(item.item_barcode)
-              ? item.item_barcode.some((b) =>
-                  this.normalizeText(b.barcode || "").startsWith(q)
-                )
-              : false;
-
-            return (
-              anyBarcodeStarts ||
-              name.startsWith(q) ||
-              code.startsWith(q) ||
-              desc.startsWith(q)
-            );
-          });
-
-          // Mantén límites/ocultar variantes como antes
-          if (
-            this.pos_profile.posa_show_template_items &&
-            this.pos_profile.posa_hide_variants_items
-          ) {
-            return filtred_list.filter((item) => !item.variant_of).slice(0, 50);
-          } else {
-            return filtred_list.slice(0, 50);
-          }
-        }
-        // === FIN ESTRICTO ===
-
-        // --- Lógica existente (clásica / contiene) ---
         if (!this.search || this.search.length < 3) {
           if (
             this.pos_profile.posa_show_template_items &&
@@ -638,7 +631,7 @@ export default {
             );
 
             if (filtred_list.length == 0) {
-              // 3) Por combinaciones “difusas” (lógica existente)
+              // 3) Por combinaciones “difusas”
               const search_combinations = this.generateWordCombinations(
                 this.search
               );
@@ -650,8 +643,7 @@ export default {
                     `.*${element.split("").join(".*")}.*`
                   );
                   if (this.pos_profile.strict_search) {
-                    // NOTA: aquí antes pedía igualdad; lo mantenemos por compatibilidad,
-                    // pero ya no entra cuando strict sin % por la rama de prefijo de arriba.
+                    // (mantengo compatibilidad: si no entró por prefijo arriba)
                     if (
                       element === item.item_name.toLowerCase() ||
                       element === item.item_code.toLowerCase()
@@ -722,6 +714,7 @@ export default {
         return this.items.slice(0, 50);
       }
     },
+
     debounce_search: {
       get() {
         return this.first_search;
@@ -732,18 +725,14 @@ export default {
     },
   },
 
-  created: function () {
+  created() {
     this.$nextTick(function () {});
     evntBus.$on("register_pos_profile", (data) => {
       this.pos_profile = data.pos_profile;
-      // NUEVO: sincroniza el flag local desde el perfil recibido
-      this.strict_search = !!(data.pos_profile && data.pos_profile.strict_search);
-
+      this.strict_search = !!data.pos_profile.strict_search; // sincroniza bandera
       this.get_items();
       this.get_items_groups();
-      this.items_view = this.pos_profile.posa_default_card_view
-        ? "card"
-        : "list";
+      this.items_view = this.pos_profile.posa_default_card_view ? "card" : "list";
     });
     evntBus.$on("update_cur_items_details", () => {
       this.update_cur_items_details();
@@ -770,8 +759,8 @@ export default {
   },
 
   beforeDestroy() {
-    evntBus.$off("focus-search", this.focusSearchInput); // NUEVO: limpieza del listener
-  }
+    evntBus.$off("focus-search", this.focusSearchInput);
+  },
 };
 </script>
 
