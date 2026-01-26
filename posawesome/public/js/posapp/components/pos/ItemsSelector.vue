@@ -11,6 +11,7 @@
         top
         color="info"
       ></v-progress-linear>
+
       <v-row class="items px-2 py-1">
         <v-col class="pb-0 mb-2">
           <v-text-field
@@ -30,6 +31,7 @@
             ref="debounce_search"
           ></v-text-field>
         </v-col>
+
         <v-col cols="3" class="pb-0 mb-2" v-if="pos_profile.posa_input_qty">
           <v-text-field
             dense
@@ -44,6 +46,7 @@
             @keydown.esc="esc_event"
           ></v-text-field>
         </v-col>
+
         <v-col cols="2" class="pb-0 mb-2" v-if="pos_profile.posa_new_line">
           <v-checkbox
             v-model="new_line"
@@ -54,6 +57,7 @@
             hide-details
           ></v-checkbox>
         </v-col>
+
         <v-col cols="12" class="pt-0 mt-0">
           <div fluid class="items" v-if="items_view == 'card'">
             <v-row dense class="overflow-y-auto" style="max-height: 67vh">
@@ -82,6 +86,7 @@
                       class="text-caption px-1 pb-0"
                     ></v-card-text>
                   </v-img>
+
                   <v-card-text class="text--primary pa-1">
                     <div class="text-caption primary--text">
                       {{ currencySymbol(item.currency) || "" }}
@@ -96,6 +101,7 @@
               </v-col>
             </v-row>
           </div>
+
           <div fluid class="items" v-if="items_view == 'list'">
             <div class="my-0 py-0 overflow-y-auto" style="max-height: 65vh">
               <template>
@@ -109,15 +115,16 @@
                   @click:row="add_item"
                 >
                   <template v-slot:item.rate="{ item }">
-                    <span class="primary--text"
-                      >{{ currencySymbol(item.currency) }}
-                      {{ formtCurrency(item.rate) }}</span
-                    >
+                    <span class="primary--text">
+                      {{ currencySymbol(item.currency) }}
+                      {{ formtCurrency(item.rate) }}
+                    </span>
                   </template>
+
                   <template v-slot:item.actual_qty="{ item }">
-                    <span class="golden--text">{{
-                      formtFloat(item.actual_qty)
-                    }}</span>
+                    <span class="golden--text">
+                      {{ formtFloat(item.actual_qty) }}
+                    </span>
                   </template>
                 </v-data-table>
               </template>
@@ -126,6 +133,7 @@
         </v-col>
       </v-row>
     </v-card>
+
     <v-card class="cards mb-0 mt-3 pa-2 grey lighten-5">
       <v-row no-gutters align="center" justify="center">
         <v-col cols="12">
@@ -139,6 +147,7 @@
             v-on:change="search_onchange"
           ></v-select>
         </v-col>
+
         <v-col cols="3" class="mt-1">
           <v-btn-toggle
             v-model="items_view"
@@ -151,16 +160,18 @@
             <v-btn small value="card">{{ __("Card") }}</v-btn>
           </v-btn-toggle>
         </v-col>
+
         <v-col cols="4" class="mt-2">
-          <v-btn small block color="primary" text @click="show_coupons"
-            >{{ couponsCount }} {{ __("Coupons") }}</v-btn
-          >
+          <v-btn small block color="primary" text @click="show_coupons">
+            {{ couponsCount }} {{ __("Coupons") }}
+          </v-btn>
         </v-col>
+
         <v-col cols="5" class="mt-2">
-          <v-btn small block color="primary" text @click="show_offers"
-            >{{ offersCount }} {{ __("Offers") }} : {{ appliedOffersCount }}
-            {{ __("Applied") }}</v-btn
-          >
+          <v-btn small block color="primary" text @click="show_offers">
+            {{ offersCount }} {{ __("Offers") }} : {{ appliedOffersCount }}
+            {{ __("Applied") }}
+          </v-btn>
         </v-col>
       </v-row>
     </v-card>
@@ -194,8 +205,22 @@ export default {
     customer: null,
     new_line: false,
     qty: 1,
-    // bandera local que sincronizamos desde POS Profile
+
+    // bandera local sincronizada desde POS Profile
     strict_search: false,
+
+    // ====== Scanner buffer (para Electron y Web) ======
+    scan_buf: "",
+    scan_last_ts: 0,
+    scan_clear_timer: null,
+
+    // Ajustes finos:
+    // si el tiempo entre teclas es menor o igual a este umbral, lo consideramos "scanner"
+    scan_inter_key_ms: 45,
+    // cuánto tiempo sin teclas para limpiar el buffer
+    scan_idle_clear_ms: 180,
+    // mínimo de caracteres para tratarlo como escaneo
+    scan_min_len: 3,
   }),
 
   watch: {
@@ -215,12 +240,12 @@ export default {
   },
 
   methods: {
-    // === Helpers para búsqueda estricta (prefijo) ===
+    // ============ Helpers búsqueda estricta (prefijo) ============
     normalize(str) {
       return (str || "")
         .toString()
         .normalize("NFD")
-        .replace(/\p{Diacritic}/gu, "") // quita acentos
+        .replace(/\p{Diacritic}/gu, "")
         .toLowerCase()
         .trim();
     },
@@ -228,12 +253,9 @@ export default {
       if (!item) return false;
       const fields = [item.item_code, item.item_name, item.description];
 
-      // barcodes
       if (Array.isArray(item.item_barcode)) {
         for (const b of item.item_barcode) {
-          if (b?.barcode && this.normalize(b.barcode).startsWith(normTerm)) {
-            return true;
-          }
+          if (b?.barcode && this.normalize(b.barcode).startsWith(normTerm)) return true;
         }
       }
       for (const f of fields) {
@@ -242,7 +264,90 @@ export default {
       return false;
     },
 
-    // === Métodos existentes ===
+    // ============ Scanner (buffer por velocidad) ============
+    isSearchInputFocused() {
+      const comp = this.$refs.debounce_search;
+      const el = comp && comp.$el ? comp.$el.querySelector("input") : null;
+      return !!(el && document.activeElement === el);
+    },
+
+    resetScanBuffer() {
+      this.scan_buf = "";
+      this.scan_last_ts = 0;
+      if (this.scan_clear_timer) {
+        clearTimeout(this.scan_clear_timer);
+        this.scan_clear_timer = null;
+      }
+    },
+
+    armScanClearTimer() {
+      if (this.scan_clear_timer) clearTimeout(this.scan_clear_timer);
+      this.scan_clear_timer = setTimeout(() => {
+        this.resetScanBuffer();
+      }, this.scan_idle_clear_ms);
+    },
+
+    onDocKeyDownScanner(e) {
+      // Solo actuamos si el foco está en el input de búsqueda
+      if (!this.isSearchInputFocused()) return;
+
+      // Ignorar combinaciones (Ctrl/Alt/Meta) para no chocar con atajos
+      if (e.ctrlKey || e.altKey || e.metaKey) return;
+
+      const now = Date.now();
+
+      // Enter: si el buffer parece de scanner => procesar como scan
+      if (e.key === "Enter") {
+        const buf = (this.scan_buf || "").trim();
+
+        // Si tenemos un buffer suficientemente largo, lo tratamos como escaneo
+        if (buf && buf.length >= this.scan_min_len) {
+          e.preventDefault();
+          e.stopImmediatePropagation();
+
+          // Inyecta el código limpio al modelo y ejecuta búsqueda
+          this.first_search = buf;
+          this.search_onchange();
+
+          // Limpia para el siguiente scan
+          this.resetScanBuffer();
+        } else {
+          // No era scanner, solo limpia buffer y deja que el Enter normal funcione
+          this.resetScanBuffer();
+        }
+        return;
+      }
+
+      // Capturar solo caracteres imprimibles (scanner suele mandar letras/números)
+      if (typeof e.key === "string" && e.key.length === 1) {
+        const delta = this.scan_last_ts ? (now - this.scan_last_ts) : 0;
+
+        // Si el tiempo entre teclas es rápido, seguimos acumulando.
+        // Si fue lento, empezamos de nuevo (para no mezclar con tipeo humano).
+        if (!this.scan_last_ts || delta <= this.scan_inter_key_ms) {
+          this.scan_buf += e.key;
+        } else {
+          this.scan_buf = e.key;
+        }
+
+        this.scan_last_ts = now;
+        this.armScanClearTimer();
+      } else {
+        // Teclas no imprimibles: no mezclarlas
+        // (ej: Shift, Arrow, etc.)
+      }
+    },
+
+    installScannerListener() {
+      // captura verdadera para ganarle a handlers de componentes si el scanner mete Enter
+      document.addEventListener("keydown", this.onDocKeyDownScanner, true);
+    },
+
+    uninstallScannerListener() {
+      document.removeEventListener("keydown", this.onDocKeyDownScanner, true);
+    },
+
+    // ============ POS Awesome existente ============
     focusSearchInput() {
       this.$nextTick(() => {
         const comp = this.$refs.debounce_search;
@@ -253,12 +358,15 @@ export default {
         }
       });
     },
+
     show_offers() {
       evntBus.$emit("show_offers", "true");
     },
+
     show_coupons() {
       evntBus.$emit("show_coupons", "true");
     },
+
     get_items() {
       if (!this.pos_profile) {
         console.error("No POS Profile");
@@ -269,12 +377,9 @@ export default {
       let search = this.get_search(this.first_search);
       let gr = "";
       let sr = "";
-      if (search) {
-        sr = search;
-      }
-      if (vm.item_group != "ALL") {
-        gr = vm.item_group.toLowerCase();
-      }
+      if (search) sr = search;
+      if (vm.item_group != "ALL") gr = vm.item_group.toLowerCase();
+
       if (
         vm.pos_profile.posa_local_storage &&
         localStorage.items_storage &&
@@ -284,6 +389,7 @@ export default {
         evntBus.$emit("set_all_items", vm.items);
         vm.loading = false;
       }
+
       frappe.call({
         method: "posawesome.posawesome.api.posapp.get_items",
         args: {
@@ -298,21 +404,19 @@ export default {
             vm.items = r.message;
             evntBus.$emit("set_all_items", vm.items);
             vm.loading = false;
-            console.info("Items Loaded");
+
             if (
               vm.pos_profile.posa_local_storage &&
               !vm.pos_profile.pose_use_limit_search
             ) {
               localStorage.setItem("items_storage", "");
               try {
-                localStorage.setItem(
-                  "items_storage",
-                  JSON.stringify(r.message)
-                );
+                localStorage.setItem("items_storage", JSON.stringify(r.message));
               } catch (e) {
                 console.error(e);
               }
             }
+
             if (vm.pos_profile.pose_use_limit_search) {
               vm.enter_event();
             }
@@ -320,11 +424,10 @@ export default {
         },
       });
     },
+
     get_items_groups() {
-      if (!this.pos_profile) {
-        console.log("No POS Profile");
-        return;
-      }
+      if (!this.pos_profile) return;
+
       if (this.pos_profile.item_groups.length > 0) {
         this.pos_profile.item_groups.forEach((element) => {
           if (element.item_group !== "All Item Groups") {
@@ -338,14 +441,13 @@ export default {
           args: {},
           callback: function (r) {
             if (r.message) {
-              r.message.forEach((element) => {
-                vm.items_group.push(element.name);
-              });
+              r.message.forEach((element) => vm.items_group.push(element.name));
             }
           },
         });
       }
     },
+
     getItmesHeaders() {
       const items_headers = [
         { text: __("Name"), align: "start", sortable: true, value: "item_name" },
@@ -359,14 +461,13 @@ export default {
       }
       return items_headers;
     },
+
     add_item(item) {
       item = { ...item };
       if (item.has_variants) {
         evntBus.$emit("open_variants_model", item, this.items);
       } else {
-        if (!item.qty || item.qty === 1) {
-          item.qty = Math.abs(this.qty);
-        }
+        if (!item.qty || item.qty === 1) item.qty = Math.abs(this.qty);
 
         const storedPrice = localStorage.getItem("totalPrice");
         const currentTotal = storedPrice ? parseFloat(storedPrice) : 0;
@@ -377,20 +478,22 @@ export default {
         this.qty = 1;
       }
     },
+
     enter_event() {
       let match = false;
-      if (!this.filtred_items.length || !this.first_search) {
-        return;
-      }
+      if (!this.filtred_items.length || !this.first_search) return;
+
       const qty = this.get_item_qty(this.first_search);
       const new_item = { ...this.filtred_items[0] };
       new_item.qty = flt(qty);
+
       new_item.item_barcode.forEach((element) => {
         if (this.search == element.barcode) {
           new_item.uom = element.posa_uom;
           match = true;
         }
       });
+
       if (
         !new_item.to_set_serial_no &&
         new_item.has_serial_no &&
@@ -403,9 +506,8 @@ export default {
           }
         });
       }
-      if (this.flags.serial_no) {
-        new_item.to_set_serial_no = this.flags.serial_no;
-      }
+      if (this.flags.serial_no) new_item.to_set_serial_no = this.flags.serial_no;
+
       if (
         !new_item.to_set_batch_no &&
         new_item.has_batch_no &&
@@ -419,9 +521,8 @@ export default {
           }
         });
       }
-      if (this.flags.batch_no) {
-        new_item.to_set_batch_no = this.flags.batch_no;
-      }
+      if (this.flags.batch_no) new_item.to_set_batch_no = this.flags.batch_no;
+
       if (match) {
         this.add_item(new_item);
         this.search = null;
@@ -433,6 +534,7 @@ export default {
         this.$refs.debounce_search.focus();
       }
     },
+
     search_onchange() {
       const vm = this;
       if (vm.pos_profile.pose_use_limit_search) {
@@ -441,60 +543,52 @@ export default {
         vm.enter_event();
       }
     },
+
     get_item_qty(first_search) {
       let scal_qty = Math.abs(this.qty);
       if (first_search.startsWith(this.pos_profile.posa_scale_barcode_start)) {
         let pesokg1 = first_search.substr(7, 5);
         let pesokg;
-        if (pesokg1.startsWith("0000")) {
-          pesokg = "0.00" + pesokg1.substr(4);
-        } else if (pesokg1.startsWith("000")) {
-          pesokg = "0.0" + pesokg1.substr(3);
-        } else if (pesokg1.startsWith("00")) {
-          pesokg = "0." + pesokg1.substr(2);
-        } else if (pesokg1.startsWith("0")) {
-          pesokg =
-            pesokg1.substr(1, 1) + "." + pesokg1.substr(2, pesokg1.length);
-        } else if (!pesokg1.startsWith("0")) {
-          pesokg =
-            pesokg1.substr(0, 2) + "." + pesokg1.substr(2, pesokg1.length);
-        }
+        if (pesokg1.startsWith("0000")) pesokg = "0.00" + pesokg1.substr(4);
+        else if (pesokg1.startsWith("000")) pesokg = "0.0" + pesokg1.substr(3);
+        else if (pesokg1.startsWith("00")) pesokg = "0." + pesokg1.substr(2);
+        else if (pesokg1.startsWith("0"))
+          pesokg = pesokg1.substr(1, 1) + "." + pesokg1.substr(2, pesokg1.length);
+        else
+          pesokg = pesokg1.substr(0, 2) + "." + pesokg1.substr(2, pesokg1.length);
         scal_qty = pesokg;
       }
       return scal_qty;
     },
+
     get_search(first_search) {
       let search_term = "";
-      if (
-        first_search &&
-        first_search.startsWith(this.pos_profile.posa_scale_barcode_start)
-      ) {
+      if (first_search && first_search.startsWith(this.pos_profile.posa_scale_barcode_start)) {
         search_term = first_search.substr(0, 7);
       } else {
         search_term = first_search;
       }
       return search_term;
     },
+
     esc_event() {
       this.search = null;
       this.first_search = null;
       this.qty = 1;
       this.$refs.debounce_search.focus();
+      this.resetScanBuffer();
     },
+
     update_items_details(items) {
       const vm = this;
       frappe.call({
         method: "posawesome.posawesome.api.posapp.get_items_details",
-        args: {
-          pos_profile: vm.pos_profile,
-          items_data: items,
-        },
+        args: { pos_profile: vm.pos_profile, items_data: items },
         callback: function (r) {
           if (r.message) {
             items.forEach((item) => {
-              const updated_item = r.message.find(
-                (element) => element.item_code == item.item_code
-              );
+              const updated_item = r.message.find((element) => element.item_code == item.item_code);
+              if (!updated_item) return;
               item.actual_qty = updated_item.actual_qty;
               item.serial_no_data = updated_item.serial_no_data;
               item.batch_no_data = updated_item.batch_no_data;
@@ -504,44 +598,17 @@ export default {
         },
       });
     },
+
     update_cur_items_details() {
       this.update_items_details(this.filtred_items);
     },
-    scan_barcoud() {
-      const vm = this;
-      onScan.attachTo(document, {
-        suffixKeyCodes: [],
-        keyCodeMapper: function (oEvent) {
-          oEvent.stopImmediatePropagation();
-          return onScan.decodeKeyEvent(oEvent);
-        },
-        onScan: function (sCode) {
-          setTimeout(() => {
-            vm.trigger_onscan(sCode);
-          }, 300);
-        },
-      });
-    },
-    trigger_onscan(sCode) {
-      if (this.filtred_items.length == 0) {
-        evntBus.$emit("show_mesage", {
-          text: `No Item has this barcode "${sCode}"`,
-          color: "error",
-        });
-        frappe.utils.play_sound("error");
-      } else {
-        this.enter_event();
-        this.debounce_search = null;
-        this.search = null;
-      }
-    },
+
     generateWordCombinations(inputString) {
       const words = inputString.split(" ");
       const combinations = [];
       function permute(arr, m = []) {
-        if (arr.length === 0) {
-          combinations.push(m.join(" "));
-        } else {
+        if (arr.length === 0) combinations.push(m.join(" "));
+        else {
           for (let i = 0; i < arr.length; i++) {
             const current = arr.slice();
             const next = current.splice(i, 1);
@@ -556,63 +623,51 @@ export default {
 
   computed: {
     filtred_items() {
-      // Normaliza el término que llega del input
       this.search = this.get_search(this.first_search);
 
-      // === MODO ESTRICTO (prefijo) SI NO HAY '%' ===
+      // ===== MODO ESTRICTO (prefijo) si no hay '%' =====
       const raw = (this.search || "").toString();
       const hasPercent = raw.includes("%");
       const strict = !!this.strict_search;
 
       if (strict && raw && !hasPercent) {
         const normTerm = this.normalize(raw);
+
         const inGroup =
           this.item_group != "ALL"
             ? this.items.filter((it) =>
-                (it.item_group || "")
-                  .toLowerCase()
-                  .includes(this.item_group.toLowerCase())
+                (it.item_group || "").toLowerCase().includes(this.item_group.toLowerCase())
               )
             : this.items;
 
         let list = inGroup.filter((it) => this.startsWithAnyField(it, normTerm));
 
-        if (
-          this.pos_profile.posa_show_template_items &&
-          this.pos_profile.posa_hide_variants_items
-        ) {
+        if (this.pos_profile.posa_show_template_items && this.pos_profile.posa_hide_variants_items) {
           list = list.filter((it) => !it.variant_of);
         }
         return list.slice(0, 50);
       }
 
-      // === LÓGICA EXISTENTE (clásica / contiene) ===
+      // ===== LÓGICA CLÁSICA (contains) =====
       if (!this.pos_profile.pose_use_limit_search) {
         let filtred_list = [];
         let filtred_group_list = [];
 
-        // Filtrar por grupo
         if (this.item_group != "ALL") {
           filtred_group_list = this.items.filter((item) =>
-            item.item_group.toLowerCase().includes(this.item_group.toLowerCase())
+            (item.item_group || "").toLowerCase().includes(this.item_group.toLowerCase())
           );
         } else {
           filtred_group_list = this.items;
         }
 
         if (!this.search || this.search.length < 3) {
-          if (
-            this.pos_profile.posa_show_template_items &&
-            this.pos_profile.posa_hide_variants_items
-          ) {
-            return (filtred_list = filtred_group_list
-              .filter((item) => !item.variant_of)
-              .slice(0, 50));
-          } else {
-            return (filtred_list = filtred_group_list.slice(0, 50));
+          if (this.pos_profile.posa_show_template_items && this.pos_profile.posa_hide_variants_items) {
+            return filtred_group_list.filter((item) => !item.variant_of).slice(0, 50);
           }
+          return filtred_group_list.slice(0, 50);
         } else if (this.search) {
-          // 1) Coincidencia exacta por código de barras
+          // 1) barcode exacto
           filtred_list = filtred_group_list.filter((item) => {
             let found = false;
             for (let element of item.item_barcode) {
@@ -625,34 +680,29 @@ export default {
           });
 
           if (filtred_list.length == 0) {
-            // 2) Por item_code (contains)
+            // 2) item_code contains
             filtred_list = filtred_group_list.filter((item) =>
-              item.item_code.toLowerCase().includes(this.search.toLowerCase())
+              (item.item_code || "").toLowerCase().includes(this.search.toLowerCase())
             );
 
             if (filtred_list.length == 0) {
-              // 3) Por combinaciones “difusas”
-              const search_combinations = this.generateWordCombinations(
-                this.search
-              );
+              // 3) fuzzy por combinaciones
+              const search_combinations = this.generateWordCombinations(this.search);
               filtred_list = filtred_group_list.filter((item) => {
                 let found = false;
                 for (let element of search_combinations) {
                   element = element.toLowerCase().trim();
-                  let element_regex = new RegExp(
-                    `.*${element.split("").join(".*")}.*`
-                  );
+                  let element_regex = new RegExp(`.*${element.split("").join(".*")}.*`);
                   if (this.pos_profile.strict_search) {
-                    // (mantengo compatibilidad: si no entró por prefijo arriba)
                     if (
-                      element === item.item_name.toLowerCase() ||
-                      element === item.item_code.toLowerCase()
+                      element === (item.item_name || "").toLowerCase() ||
+                      element === (item.item_code || "").toLowerCase()
                     ) {
                       found = true;
                       break;
                     }
                   } else {
-                    if (element_regex.test(item.item_name.toLowerCase())) {
+                    if (element_regex.test((item.item_name || "").toLowerCase())) {
                       found = true;
                       break;
                     }
@@ -662,17 +712,13 @@ export default {
               });
             }
 
-            // 4) Serial no (si aplica)
-            if (
-              filtred_list.length == 0 &&
-              this.pos_profile.posa_search_serial_no
-            ) {
+            // 4) serial
+            if (filtred_list.length == 0 && this.pos_profile.posa_search_serial_no) {
               filtred_list = filtred_group_list.filter((item) => {
                 let found = false;
                 for (let element of item.serial_no_data) {
                   if (element.serial_no == this.search) {
                     found = true;
-                    this.flags.serial_no = null;
                     this.flags.serial_no = this.search;
                     break;
                   }
@@ -681,17 +727,13 @@ export default {
               });
             }
 
-            // 5) Batch no (si aplica)
-            if (
-              filtred_list.length == 0 &&
-              this.pos_profile.posa_search_batch_no
-            ) {
+            // 5) batch
+            if (filtred_list.length == 0 && this.pos_profile.posa_search_batch_no) {
               filtred_list = filtred_group_list.filter((item) => {
                 let found = false;
                 for (let element of item.batch_no_data) {
                   if (element.batch_no == this.search) {
                     found = true;
-                    this.flags.batch_no = null;
                     this.flags.batch_no = this.search;
                     break;
                   }
@@ -702,17 +744,13 @@ export default {
           }
         }
 
-        if (
-          this.pos_profile.posa_show_template_items &&
-          this.pos_profile.posa_hide_variants_items
-        ) {
+        if (this.pos_profile.posa_show_template_items && this.pos_profile.posa_hide_variants_items) {
           return filtred_list.filter((item) => !item.variant_of).slice(0, 50);
-        } else {
-          return filtred_list.slice(0, 50);
         }
-      } else {
-        return this.items.slice(0, 50);
+        return filtred_list.slice(0, 50);
       }
+
+      return this.items.slice(0, 50);
     },
 
     debounce_search: {
@@ -726,17 +764,16 @@ export default {
   },
 
   created() {
-    this.$nextTick(function () {});
     evntBus.$on("register_pos_profile", (data) => {
       this.pos_profile = data.pos_profile;
-      this.strict_search = !!data.pos_profile.strict_search; // sincroniza bandera
+      this.strict_search = !!data.pos_profile.strict_search;
+
       this.get_items();
       this.get_items_groups();
       this.items_view = this.pos_profile.posa_default_card_view ? "card" : "list";
     });
-    evntBus.$on("update_cur_items_details", () => {
-      this.update_cur_items_details();
-    });
+
+    evntBus.$on("update_cur_items_details", () => this.update_cur_items_details());
     evntBus.$on("update_offers_counters", (data) => {
       this.offersCount = data.offersCount;
       this.appliedOffersCount = data.appliedOffersCount;
@@ -745,21 +782,22 @@ export default {
       this.couponsCount = data.couponsCount;
       this.appliedCouponsCount = data.appliedCouponsCount;
     });
-    evntBus.$on("update_customer_price_list", (data) => {
-      this.customer_price_list = data;
-    });
-    evntBus.$on("update_customer", (data) => {
-      this.customer = data;
-    });
+    evntBus.$on("update_customer_price_list", (data) => (this.customer_price_list = data));
+    evntBus.$on("update_customer", (data) => (this.customer = data));
   },
 
   mounted() {
-    this.scan_barcoud();
+    // Scanner por velocidad (clave para Electron)
+    this.installScannerListener();
+
+    // Mantener tu comportamiento
     evntBus.$on("focus-search", this.focusSearchInput);
   },
 
   beforeDestroy() {
     evntBus.$off("focus-search", this.focusSearchInput);
+    this.uninstallScannerListener();
+    this.resetScanBuffer();
   },
 };
 </script>
