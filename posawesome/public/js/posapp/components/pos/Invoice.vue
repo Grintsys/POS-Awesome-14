@@ -1048,7 +1048,7 @@ export default {
       });
       sum -= this.flt(this.discount_amount);
       sum += this.flt(this.delivery_charges_rate);
-      total_cancel = this.flt(sum, this.currency_precision);
+      this.total_cancel = this.flt(sum, this.currency_precision);
       return this.flt(sum, this.currency_precision);
     },
     total_items_discount_amount() {
@@ -3150,11 +3150,14 @@ export default {
         }, 0);
       }
     },
-    load_print_page(invoice_name) {
+
+    async load_print_page(invoice_name) {
       const print_format =
         this.pos_profile.print_format_for_online ||
         this.pos_profile.print_format;
+
       const letter_head = this.pos_profile.letter_head || 0;
+
       const url =
         frappe.urllib.get_base_url() +
         "/printview?doctype=Sales%20Invoice&name=" +
@@ -3164,14 +3167,30 @@ export default {
         print_format +
         "&no_letterhead=" +
         letter_head;
+
+      // ✅ Leaf-POS (Electron): imprime sin diálogo usando la impresora predeterminada
+      if (window.asteroid && typeof window.asteroid.printUrl === "function") {
+        const res = await window.asteroid.printUrl({ url });
+
+        // Fallback al comportamiento web si algo falla, para no detener la operación
+        if (!res || res.ok !== true) {
+          const w = window.open(url, "Print");
+          w.addEventListener("load", () => w.print(), true);
+        }
+        return;
+      }
+
+      // 🌐 Web normal: abre ventana y pide confirmación (comportamiento del navegador)
       const printWindow = window.open(url, "Print");
       printWindow.addEventListener(
         "load",
         function () {
           printWindow.print();
-          // printWindow.close();
-          // NOTE : uncomoent this to auto closing printing window
         },
+        true
+      );
+    },
+
         true
       );
     },
@@ -3440,14 +3459,6 @@ export default {
       },
     },
   },
-  items: {
-  deep: true,
-  handler(items) {
-    this.handelOffers();
-    this.$forceUpdate();
-    window.hasUnsavedProducts = items.length > 0;
-  },
-},
 };
 </script>
 
