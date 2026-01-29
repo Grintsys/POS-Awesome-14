@@ -406,8 +406,7 @@
                       @keydown.enter.prevent="onQtyEnter(item, $event)"   
                       ref="qtyInput"                                      
                       :rules="[isNumber]"
-                      :disabled="!!item.posa_is_offer || !!item.posa_is_replace"
-                    /></v-text-field>
+                      :disabled="!!item.posa_is_offer || !!item.posa_is_replace" />
                   </v-col>
                   <v-col cols="4">
                     <v-select
@@ -828,8 +827,7 @@
                 dense
                 color="warning"
                 hide-details
-                :readonly="!discount_authorization || !pos_profile.posa_allow_user_to_edit_additional_discount || !!discount_percentage_offer_name"
-              /></v-text-field>
+                :readonly="!discount_authorization || !pos_profile.posa_allow_user_to_edit_additional_discount || !!discount_percentage_offer_name" />
             </v-col>
             <v-col cols="6" class="pa-1 mt-2">
               <v-text-field
@@ -3191,9 +3189,7 @@ export default {
       );
     },
 
-        true
-      );
-    },
+
 
     print_draft_invoice() {
       if (!this.pos_profile.posa_allow_print_draft_invoices) {
