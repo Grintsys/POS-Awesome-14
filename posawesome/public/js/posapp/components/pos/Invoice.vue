@@ -93,7 +93,7 @@
         <v-card-actions>
           <v-spacer></v-spacer>
           <v-btn color="success" @click="authorize_discount">{{ __("Autorizar") }}</v-btn>
-          <v-btn color="warning" @click="closeDiscountDialog">{{ __("Cancelar") }}</v-btn>
+          <v-btn color="warning" @click="closeDiscountDialog">{{ __("Anular") }}</v-btn>
         </v-card-actions>
       </v-card>
     </v-dialog>
@@ -141,7 +141,7 @@
       <v-card>
         <v-card-title class="text-h5">
           <span class="headline primary--text">{{
-            __("Cancelar Factura?")
+            __("Anular Factura?")
           }}</span>
         </v-card-title>
         <v-card-text>
@@ -166,7 +166,7 @@
         <v-card-actions>
           <v-spacer></v-spacer>
           <v-btn color="error" @click="authorization_cancel_invoice(cancel_password)">
-            {{ __("Cancel") }}
+            {{ __("ANULAR") }}
           </v-btn>
           <v-btn color="warning" @click="cancel_dialog = false">
             {{ __("Volver") }}
@@ -900,7 +900,7 @@
                 color="error"
                 dark
                 @click="cancel_dialog = true"
-                >{{ __("Cancel") }}</v-btn
+                >{{ __("Anular") }}</v-btn
               >
             </v-col>
             <v-col cols="6" class="pa-1">
