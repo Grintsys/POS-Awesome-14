@@ -441,14 +441,13 @@ def get_customer_names(pos_profile):
 
 
 @frappe.whitelist()
-def get_sales_person_names():
-    sales_persons = frappe.get_list(
-        "Sales Person",
-        filters={"enabled": 1},
-        fields=["name", "sales_person_name"],
+def get_sales_partner_names():
+    sales_partners = frappe.get_list(
+        "Sales Partner",
+        fields=["name", "partner_name"],
         limit_page_length=100000,
     )
-    return sales_persons
+    return sales_partners
 
 
 def add_taxes_from_tax_template(item, parent_doc):
@@ -1099,6 +1098,63 @@ def create_customer(
         if email_id != customer_doc.email_id:
             set_customer_info(customer_doc.name, "email_id", email_id)
         return customer_doc
+
+@frappe.whitelist()
+def create_withdrawal_income(
+    amount,
+    pos_opening_shift,
+    note,
+    type_transaction,
+):
+    register = frappe.get_doc(
+        {
+            "doctype": "Retiro de efectivo",
+            "amount": amount,
+            "pos_opening_shift": pos_opening_shift,
+            "note": note,
+            "type_transaction": type_transaction,
+            }
+    )
+    register.insert()
+    register.submit() 
+    return register
+
+@frappe.whitelist()
+def create_history_authorization(
+    type,
+    pos_profile,
+    amount
+):
+    register = frappe.get_doc(
+        {
+            "doctype": "Historial de autorizaciones en POS",
+            "type": type,
+            "pos_profile": pos_profile,
+            "amount": amount
+        }
+    )
+    register.insert()
+    register.submit() 
+    return register
+
+@frappe.whitelist()
+def create_withdrawal_income_draft(
+    amount,
+    pos_opening_shift,
+    note,
+    type_transaction,
+):
+    register = frappe.get_doc(
+        {
+            "doctype": "Retiro de efectivo",
+            "amount": amount,
+            "pos_opening_shift": pos_opening_shift,
+            "note": note,
+            "type_transaction": type_transaction,
+            }
+    )
+    register.insert()
+    return register
 
 
 @frappe.whitelist()

@@ -49,6 +49,18 @@
                   </v-list-item-content>
                 </v-list-item>
                 <v-list-item
+                  @click="cash_witdrawal_income_dialog"
+                >
+                  <v-list-item-icon>
+                    <v-icon>mdi-currency-usd</v-icon>
+                  </v-list-item-icon>
+                  <v-list-item-content>
+                    <v-list-item-title>{{
+                      __('Retiro / Ingreso')
+                    }}</v-list-item-title>
+                  </v-list-item-content>
+                </v-list-item>
+                <v-list-item
                   @click="print_last_invoice"
                   v-if="
                     pos_profile.posa_allow_print_last_invoice &&
@@ -65,7 +77,10 @@
                   </v-list-item-content>
                 </v-list-item>
                 <v-divider class="my-0"></v-divider>
-                <v-list-item @click="logOut">
+                <v-list-item @click="logOut"
+                v-if="
+                    pos_profile.allow_logout
+                  ">
                   <v-list-item-icon>
                     <v-icon>mdi-logout</v-icon>
                   </v-list-item-icon>
@@ -176,13 +191,16 @@ export default {
     },
     go_about() {
       const win = window.open(
-        'https://github.com/yrestom/POS-Awesome',
+        'https://www.grintsys.com/grintsys-cloud.html',
         '_blank'
       );
       win.focus();
     },
     close_shift_dialog() {
       evntBus.$emit('open_closing_dialog');
+    },
+    cash_witdrawal_income_dialog() {
+      evntBus.$emit('open_cash_witdrawal_income_dialog');
     },
     show_mesage(data) {
       this.snack = true;
