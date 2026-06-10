@@ -441,14 +441,13 @@ def get_customer_names(pos_profile):
 
 
 @frappe.whitelist()
-def get_sales_person_names():
-    sales_persons = frappe.get_list(
-        "Sales Person",
-        filters={"enabled": 1},
-        fields=["name", "sales_person_name"],
+def get_sales_partner_names():
+    sales_partners = frappe.get_list(
+        "Sales Partner",
+        fields=["name", "partner_name"],
         limit_page_length=100000,
     )
-    return sales_persons
+    return sales_partners
 
 
 def add_taxes_from_tax_template(item, parent_doc):
