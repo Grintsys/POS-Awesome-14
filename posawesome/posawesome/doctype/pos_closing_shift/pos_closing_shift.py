@@ -32,6 +32,17 @@ class POSClosingShift(Document):
                 f"No se puede cerrar la caja porque hay retiros de efectivo en estado 'Borrador' asociadas al turno.\n\nRetiros: {draft_withdrawals_list}\n\nPor favor, totalice antes de cerrar la caja."
             ))
 
+        if frappe.db.exists("DocType", "Certificado de Regalo"):
+            draft_certs = frappe.get_all("Certificado de Regalo", filters={
+                "pos_opening_shift": self.pos_opening_shift,
+                "docstatus": 0,
+            }, fields=["name"])
+            if draft_certs:
+                certs_list = ", ".join([c["name"] for c in draft_certs])
+                frappe.throw(_(
+                    f"No se puede cerrar la caja porque hay Certificados de Regalo en estado 'Borrador' asociados al turno.\n\nCertificados: {certs_list}\n\nPor favor, valide o elimine antes de cerrar la caja."
+                ))
+
         user = frappe.get_all(
             "POS Closing Shift",
             filters={
@@ -346,6 +357,53 @@ def make_closing_shift_from_opening(opening_shift):
             ]
             if existing_pay:
                 existing_pay[0].expected_amount += flt(cd.amount)
+
+    if frappe.db.exists("DocType", "Certificado de Regalo"):
+        gift_certs = frappe.get_all(
+            "Certificado de Regalo",
+            filters={
+                "pos_opening_shift": opening_shift.get("name"),
+                "docstatus": 1,
+                "es_saldo_inicial": 0,
+            },
+            fields=["name", "codigo_enmascarado", "monto_inicial", "mode_of_payment", "owner"],
+        )
+        cash_mop = (
+            frappe.get_value(
+                "POS Profile",
+                opening_shift.get("pos_profile"),
+                "posa_cash_mode_of_payment",
+            )
+            or "Efectivo"
+        )
+        for gc in gift_certs:
+            if not gc.mode_of_payment or not flt(gc.monto_inicial):
+                continue
+            existing_pay = [
+                pay for pay in payments if pay.mode_of_payment == gc.mode_of_payment
+            ]
+            if existing_pay:
+                existing_pay[0].expected_amount += flt(gc.monto_inicial)
+            else:
+                payments.append(
+                    frappe._dict(
+                        {
+                            "mode_of_payment": gc.mode_of_payment,
+                            "opening_amount": 0,
+                            "expected_amount": flt(gc.monto_inicial),
+                        }
+                    )
+                )
+            if gc.mode_of_payment in ("Efectivo", cash_mop):
+                cash_inner.append(
+                    frappe._dict(
+                        {
+                            "cashier": gc.owner,
+                            "amount": flt(gc.monto_inicial),
+                            "note": f"Certificado de Regalo {gc.name} ({gc.codigo_enmascarado})",
+                        }
+                    )
+                )
 
     closing_shift.set("pos_transactions", pos_transactions)
     closing_shift.set("payment_reconciliation", payments)

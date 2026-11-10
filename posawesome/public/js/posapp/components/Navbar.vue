@@ -61,6 +61,30 @@
                   </v-list-item-content>
                 </v-list-item>
                 <v-list-item
+                  @click="emit_gift_certificate_dialog"
+                >
+                  <v-list-item-icon>
+                    <v-icon>mdi-card-giftcard</v-icon>
+                  </v-list-item-icon>
+                  <v-list-item-content>
+                    <v-list-item-title>{{
+                      __('Emitir Certificado de Regalo')
+                    }}</v-list-item-title>
+                  </v-list-item-content>
+                </v-list-item>
+                <v-list-item
+                  @click="inquiry_gift_certificate_dialog"
+                >
+                  <v-list-item-icon>
+                    <v-icon>mdi-barcode-scan</v-icon>
+                  </v-list-item-icon>
+                  <v-list-item-content>
+                    <v-list-item-title>{{
+                      __('Consultar Certificado')
+                    }}</v-list-item-title>
+                  </v-list-item-content>
+                </v-list-item>
+                <v-list-item
                   @click="print_last_invoice"
                   v-if="
                     pos_profile.posa_allow_print_last_invoice &&
@@ -201,6 +225,12 @@ export default {
     },
     cash_witdrawal_income_dialog() {
       evntBus.$emit('open_cash_witdrawal_income_dialog');
+    },
+    emit_gift_certificate_dialog() {
+      evntBus.$emit('open_emit_gift_certificate_dialog');
+    },
+    inquiry_gift_certificate_dialog() {
+      evntBus.$emit('open_inquiry_gift_certificate_dialog');
     },
     show_mesage(data) {
       this.snack = true;

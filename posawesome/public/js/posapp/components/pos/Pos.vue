@@ -8,6 +8,7 @@
     <MpesaPayments></MpesaPayments>
     <Variants></Variants>
     <CashWithdrawalIncome />
+    <GiftCertificateDialog />
     <OpeningDialog v-if="dialog" :dialog="dialog"></OpeningDialog>
     <v-row v-show="!dialog">
       <v-col
@@ -78,6 +79,7 @@ import Variants from './Variants.vue';
 import Returns from './Returns.vue';
 import MpesaPayments from './Mpesa-Payments.vue';
 import CashWithdrawalIncome from './CashWithdrawalIncome.vue';
+import GiftCertificateDialog from './GiftCertificateDialog.vue';
 
 export default {
   data: function () {
@@ -107,6 +109,7 @@ export default {
     MpesaPayments,
     SalesOrders,
     CashWithdrawalIncome,
+    GiftCertificateDialog,
   },
 
   methods: {
@@ -253,6 +256,16 @@ export default {
       });
       evntBus.$on('open_cash_witdrawal_income_dialog', () => {
         this.get_cash_income_data();
+      });
+      evntBus.$on('open_emit_gift_certificate_dialog', () => {
+        evntBus.$emit(
+          'open_emit_gift_certificate',
+          this.pos_opening_shift.name,
+          this.pos_profile
+        );
+      });
+      evntBus.$on('open_inquiry_gift_certificate_dialog', () => {
+        evntBus.$emit('open_inquiry_gift_certificate', this.pos_profile);
       });
       evntBus.$on('submit_closing_pos', (data) => {
         this.submit_closing_pos(data);
