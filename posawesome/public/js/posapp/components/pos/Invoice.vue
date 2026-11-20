@@ -1,19 +1,175 @@
 <template>
   <div>
+    <v-dialog v-model="item_discount_dialog" max-width="330">
+      <v-card>
+        <v-card-title class="text-h5">
+          <span class="headline primary--text">{{ __("Authorization Required") }}</span>
+        </v-card-title>
+        <v-card-text>
+          <v-text-field
+            autofocus
+            v-model="item_discount_password"
+            :label="__('Enter Authorization Code')"
+            type="password"
+            dense
+            outlined
+            color="primary"
+            @keydown.enter="confirm_item_discount_authorization"
+          />
+        </v-card-text>
+        <v-card-actions>
+          <v-spacer />
+          <v-btn color="error" @click="confirm_item_discount_authorization">
+            {{ __("Confirm") }}
+          </v-btn>
+          <v-btn color="warning" @click="item_discount_dialog = false">
+            {{ __("Back") }}
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+    <v-dialog v-model="pending_amount_auth_dialog" max-width="400" persistent no-click-animation>
+  <v-card>
+    <v-card-title class="text-h5">
+      <span class="headline primary--text">{{ __('Autorización Requerida') }}</span>
+    </v-card-title>
+    <v-card-subtitle v-if="total_price">
+      {{ `Usted cerró la pestaña con una factura en proceso y un monto pendiente de ${total_price}` }}
+    </v-card-subtitle>
+    <v-card-text>
+      <v-text-field
+        autofocus
+        v-model="auth_code"
+        :label="__('Ingrese código de autorización')"
+        type="password"
+        hide-details
+        dense
+        outlined
+        color="primary"
+        @keydown.enter="verifyAuthorization"
+      ></v-text-field>
+      <div
+        v-if="auth_error"
+        style="color: red; font-size: 0.85rem; margin-top: 4px;"
+      >
+        {{ __('Código incorrecto') }}
+      </div>
+    </v-card-text>
+    <v-card-actions>
+      <v-spacer></v-spacer>
+      <v-btn color="success" @click="verifyAuthorization">
+        {{ __('Autorizar') }}
+      </v-btn>
+    </v-card-actions>
+  </v-card>
+</v-dialog>
+    <v-dialog v-model="discount_auth_dialog" max-width="330">
+      <v-card>
+        <v-card-title class="text-h5">
+          <span class="headline warning--text">{{ __("Autorizar Descuento") }}</span>
+        </v-card-title>
+
+        <v-card-text>
+          <v-text-field
+            autofocus
+            v-model="discount_password"
+            :label="__('Ingrese código de autorización')"
+            type="password"
+            hide-details
+            dense
+            outlined
+            color="warning"
+            @keydown.enter="authorize_discount"
+          ></v-text-field>
+
+          <div
+            v-if="show_discount_password_warning"
+            style="color: red; font-size: 0.85rem; margin-top: 4px;"
+          >
+            {{ __('Código incorrecto') }}
+          </div>
+        </v-card-text>
+
+        <v-card-actions>
+          <v-spacer></v-spacer>
+          <v-btn color="success" @click="authorize_discount">{{ __("Autorizar") }}</v-btn>
+          <v-btn color="warning" @click="closeDiscountDialog">{{ __("Anular") }}</v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+    <v-dialog v-model="remove_dialog" max-width="330">
+      <v-card>
+        <v-card-title class="text-h5">
+          <span class="headline error--text">
+            {{ __("Eliminar Producto?") }}
+          </span>
+        </v-card-title>
+
+        <v-card-text>
+          <v-text-field
+            autofocus
+            v-model="remove_password"
+            :label="__('Ingrese código de autorización')"
+            type="password"
+            hide-details
+            dense
+            outlined
+            color="primary"
+            @keydown.enter="authorization_remove_item"
+          ></v-text-field>
+
+          <div
+            v-if="show_remove_password_warning"
+            style="color: red; font-size: 0.85rem; margin-top: 4px;"
+          >
+            {{ __('Código incorrecto') }}
+          </div>
+        </v-card-text>
+
+        <v-card-actions>
+          <v-spacer></v-spacer>
+          <v-btn color="error" @click="authorization_remove_item">
+            {{ __("Remove") }}
+          </v-btn>
+          <v-btn color="warning" @click="closeRemoveDialog">
+            {{ __("Volver") }}
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
     <v-dialog v-model="cancel_dialog" max-width="330">
       <v-card>
         <v-card-title class="text-h5">
           <span class="headline primary--text">{{
-            __("Cancel Current Invoice ?")
+            __("Anular Factura?")
           }}</span>
         </v-card-title>
+        <v-card-text>
+          <v-text-field
+            autofocus
+            v-model="cancel_password"
+            :label="__('Ingrese código de autorización')"
+            type="password"
+            hide-details
+            dense
+            outlined
+            color="primary"
+            @keydown.enter="authorization_cancel_invoice(cancel_password)"
+          ></v-text-field>
+          <div
+            v-if="show_invalid_password_warning"
+            style="color: red; font-size: 0.85rem; margin-top: 4px;"
+          >
+            {{ __('Código incorrecto') }}
+          </div>
+        </v-card-text>
         <v-card-actions>
           <v-spacer></v-spacer>
-          <v-btn color="error" @click="cancel_invoice">
-            {{ __("Cancel") }}
+          <v-btn color="error" @click="authorization_cancel_invoice(cancel_password)">
+            {{ __("ANULAR") }}
           </v-btn>
           <v-btn color="warning" @click="cancel_dialog = false">
-            {{ __("Back") }}
+            {{ __("Volver") }}
           </v-btn>
         </v-card-actions>
       </v-card>
@@ -246,15 +402,11 @@
                       background-color="white"
                       hide-details
                       :value="formtFloat(item.qty)"
-                      @change="
-                        [
-                          setFormatedFloat(item, 'qty', null, false, $event),
-                          calc_stock_qty(item, $event),
-                        ]
-                      "
+                      @change="[ onQtyChange(item, $event) ]"
+                      @keydown.enter.prevent="onQtyEnter(item, $event)"   
+                      ref="qtyInput"                                      
                       :rules="[isNumber]"
-                      :disabled="!!item.posa_is_offer || !!item.posa_is_replace"
-                    ></v-text-field>
+                      :disabled="!!item.posa_is_offer || !!item.posa_is_replace" />
                   </v-col>
                   <v-col cols="4">
                     <v-select
@@ -320,32 +472,18 @@
                       background-color="white"
                       hide-details
                       :value="formtFloat(item.discount_percentage)"
-                      @change="
-                        [
-                          setFormatedCurrency(
-                            item,
-                            'discount_percentage',
-                            null,
-                            true,
-                            $event
-                          ),
-                          calc_prices(item, $event),
-                        ]
-                      "
+                      @click="open_item_discount_authorization(item)"
+                      @change="[
+                        setFormatedCurrency(item, 'discount_percentage', null, true, $event),
+                        calc_prices(item, $event),
+                      ]"
                       :rules="[isNumber]"
                       id="discount_percentage"
-                      :disabled="
-                        !!item.posa_is_offer ||
-                        !!item.posa_is_replace ||
-                        item.posa_offer_applied ||
-                        !pos_profile.posa_allow_user_to_edit_item_discount ||
-                        !!invoice_doc.is_return
-                          ? true
-                          : false
-                      "
+                      :readonly="!is_item_authorized(item) || !!item.posa_is_offer || !!item.posa_is_replace || item.posa_offer_applied || !!invoice_doc.is_return"
                       suffix="%"
-                    ></v-text-field>
+                    />
                   </v-col>
+
                   <v-col cols="4">
                     <v-text-field
                       dense
@@ -356,31 +494,15 @@
                       hide-details
                       :value="formtCurrency(item.discount_amount)"
                       :rules="[isNumber]"
-                      @change="
-                        [
-                          setFormatedCurrency(
-                            item,
-                            'discount_amount',
-                            null,
-                            true,
-                            $event
-                          ),
-                          ,
-                          calc_prices(item, $event),
-                        ]
-                      "
+                      @click="open_item_discount_authorization(item)"
+                      @change="[
+                        setFormatedCurrency(item, 'discount_amount', null, true, $event),
+                        calc_prices(item, $event),
+                      ]"
                       :prefix="currencySymbol(pos_profile.currency)"
                       id="discount_amount"
-                      :disabled="
-                        !!item.posa_is_offer ||
-                        !!item.posa_is_replace ||
-                        !!item.posa_offer_applied ||
-                        !pos_profile.posa_allow_user_to_edit_item_discount ||
-                        !!invoice_doc.is_return
-                          ? true
-                          : false
-                      "
-                    ></v-text-field>
+                      :readonly="!is_item_authorized(item) || !!item.posa_is_offer || !!item.posa_is_replace || !!item.posa_offer_applied || !!invoice_doc.is_return"
+                    />
                   </v-col>
                   <v-col cols="4">
                     <v-text-field
@@ -686,18 +808,17 @@
             >
               <v-text-field
                 :value="formtFloat(additional_discount_percentage)"
-                @change="
-                  [
-                    setFormatedFloat(
-                      additional_discount_percentage,
-                      'additional_discount_percentage',
-                      null,
-                      false,
-                      $event
-                    ),
-                    update_discount_umount(),
-                  ]
-                "
+                @click="open_discount_authorization"
+                @change="[
+                  setFormatedFloat(
+                    additional_discount_percentage,
+                    'additional_discount_percentage',
+                    null,
+                    false,
+                    $event
+                  ),
+                  update_discount_umount(),
+                ]"
                 :rules="[isNumber]"
                 :label="frappe._('Additional Discount %')"
                 suffix="%"
@@ -706,13 +827,7 @@
                 dense
                 color="warning"
                 hide-details
-                :disabled="
-                  !pos_profile.posa_allow_user_to_edit_additional_discount ||
-                  discount_percentage_offer_name
-                    ? true
-                    : false
-                "
-              ></v-text-field>
+                :readonly="!discount_authorization || !pos_profile.posa_allow_user_to_edit_additional_discount || !!discount_percentage_offer_name" />
             </v-col>
             <v-col cols="6" class="pa-1 mt-2">
               <v-text-field
@@ -750,7 +865,7 @@
                 color="warning"
                 dark
                 @click="get_draft_invoices"
-                >{{ __("Held") }}</v-btn
+                >{{ __("CARGAR") }}</v-btn
               >
             </v-col>
             <v-col
@@ -785,7 +900,7 @@
                 color="error"
                 dark
                 @click="cancel_dialog = true"
-                >{{ __("Cancel") }}</v-btn
+                >{{ __("Anular") }}</v-btn
               >
             </v-col>
             <v-col cols="6" class="pa-1">
@@ -795,7 +910,7 @@
                 color="accent"
                 dark
                 @click="new_invoice"
-                >{{ __("Save/New") }}</v-btn
+                >{{ __("GUARDAR") }}</v-btn
               >
             </v-col>
             <v-col class="pa-1">
@@ -805,7 +920,7 @@
                 color="success"
                 @click="show_payment"
                 dark
-                >{{ __("PAY") }}</v-btn
+                >{{ __("PAGAR") }}</v-btn
               >
             </v-col>
             <v-col
@@ -838,6 +953,26 @@ export default {
   mixins: [format],
   data() {
     return {
+      item_discount_authorization_items: [],
+      current_item_pending_auth: null,
+      item_discount_dialog: false,
+      item_discount_password: "",
+      discount_auth_dialog: false,
+      pending_amount_auth_dialog: false,
+      total_price: 0,
+      auth_code: '',
+      auth_error: false,
+      discount_password: "",
+      show_discount_password_warning: false,
+      discount_authorization: false,
+      total_cancel: 0,
+      remove_dialog: false,
+      remove_password: "",
+      show_remove_password_warning: false,
+      item_to_remove: null,
+      cancel_dialog: false,
+      cancel_password: "",
+      show_invalid_password_warning: false,
       pos_profile: "",
       pos_opening_shift: "",
       stock_settings: "",
@@ -859,7 +994,6 @@ export default {
       itemsPerPage: 1000,
       expanded: [],
       singleExpand: true,
-      cancel_dialog: false,
       float_precision: 2,
       currency_precision: 2,
       new_line: false,
@@ -912,6 +1046,7 @@ export default {
       });
       sum -= this.flt(this.discount_amount);
       sum += this.flt(this.delivery_charges_rate);
+      this.total_cancel = this.flt(sum, this.currency_precision);
       return this.flt(sum, this.currency_precision);
     },
     total_items_discount_amount() {
@@ -924,7 +1059,167 @@ export default {
   },
 
   methods: {
+    verifyAuthorization() {
+      if (this.pos_profile.password_manager === this.auth_code) {
+        this.pending_amount_auth_dialog = false;
+        this.auth_error = false;
+
+        const totalPrice = localStorage.getItem('totalPrice');
+        localStorage.removeItem("totalPrice");
+
+        this.history_auth("Monto pendiente", totalPrice);
+
+        const args = {
+          amount: totalPrice,
+          pos_opening_shift: this.pos_opening_shift.name,
+          note: "Se cerró la pestaña con una factura en proceso y un monto pendiente de " + totalPrice,
+          type_transaction: "Ingreso",
+        };
+
+        frappe.call({
+          method: 'posawesome.posawesome.api.posapp.create_withdrawal_income',
+          args,
+          callback: (r) => {
+            if (!r.exc && r.message.name) {
+              let text = __('Creado exitosamente.');
+            } else {
+              frappe.utils.play_sound('error');
+            }
+          },
+        });
+      } else {
+        this.auth_error = true;
+      }
+    },
+
+    open_item_discount_authorization(item) {
+      if (!this.is_item_authorized(item)) {
+        this.current_item_pending_auth = item;
+        this.item_discount_password = "";
+        this.item_discount_dialog = true;
+      }
+    },
+    is_item_authorized(item) {
+      return this.item_discount_authorization_items.includes(item);
+    },
+    confirm_item_discount_authorization() {
+      if (this.item_discount_password === this.pos_profile.password_manager) {
+        this.item_discount_authorization_items.push(this.current_item_pending_auth);
+        this.item_discount_dialog = false;
+        this.history_auth("Descuento Producto", 0);
+      } else {
+        this.$toast?.error?.("Código incorrecto");
+      }
+    },
+
+    open_discount_authorization() {
+      if (!this.discount_authorization) {
+        this.discount_auth_dialog = true;
+      }
+    },
+
+    authorize_discount() {
+      if (!this.discount_password) {
+        this.$toast?.error?.("Ingrese el código de autorización");
+        return;
+      }
+
+      if (this.pos_profile.password_manager === this.discount_password) {
+        this.discount_authorization = true;
+        this.$nextTick(() => {
+          // da foco al campo después de autorizar
+          this.$refs.percentage_discount?.focus();
+        });
+        this.history_auth("Descuento Factura", 0);
+        this.closeDiscountDialog();
+      } else {
+        this.show_discount_password_warning = true;
+        this.$toast?.error?.("Código incorrecto");
+      }
+    },
+
+    closeDiscountDialog() {
+      this.discount_auth_dialog = false;
+      this.discount_password = "";
+      this.show_discount_password_warning = false;
+    },
+
+    history_auth(type, amount) {
+      const args = {
+          type: type,
+          pos_profile: this.pos_profile.name,
+          amount: amount
+        };
+
+        frappe.call({
+          method: 'posawesome.posawesome.api.posapp.create_history_authorization',
+          args,
+          callback: (r) => {
+            if (!r.exc && r.message.name) {
+              let text = __('Historial de autorización creado exitosamente.');
+            } else {
+              frappe.utils.play_sound('error');
+            }
+          },
+        });
+    },
+
+    onQtyChange(item, value) {
+      let qty = parseFloat(value);
+
+      if (isNaN(qty) || qty == 0) {
+        qty = 1; // fuerza el valor mínimo
+      }
+
+      this.setFormatedFloat(item, 'qty', null, false, qty);
+      this.calc_stock_qty(item, qty);
+    },
+
+    onQtyEnter(item, evt) {
+      const val = evt && evt.target ? evt.target.value : item.qty;
+
+      // 1) Guardar la cantidad (tu lógica existente)
+      this.onQtyChange(item, val);
+
+      // 2) Cerrar el panel/ítem expandido
+      this.expanded = [];
+
+      // 3) Después del re-render, regresar el foco al buscador
+      this.$nextTick(() => {
+        evntBus.$emit("focus-search");
+      });
+    },
+
     remove_item(item) {
+      this.item_to_remove = item;
+      this.remove_dialog = true;
+    },
+
+    closeRemoveDialog() {
+      this.remove_dialog = false;
+      this.remove_password = "";
+      this.show_remove_password_warning = false;
+      this.item_to_remove = null;
+    },
+
+    authorization_remove_item() {
+      if (!this.remove_password) {
+        this.$toast?.error?.("Ingrese el código de autorización");
+        return;
+      }
+
+      if (this.pos_profile.password_manager === this.remove_password) {
+        this.removeSelectedItem(this.item_to_remove);
+        let price_item = this.item_to_remove.price_list_rate * this.item_to_remove.qty
+        this.history_auth("Eliminar Producto", price_item);
+        this.closeRemoveDialog();
+      } else {
+        this.show_remove_password_warning = true;
+        this.$toast?.error?.("Código incorrecto");
+      }
+    },
+
+    removeSelectedItem(item) {
       const index = this.items.findIndex(
         (el) => el.posa_row_id == item.posa_row_id
       );
@@ -937,6 +1232,12 @@ export default {
       if (idx >= 0) {
         this.expanded.splice(idx, 1);
       }
+
+      if (this.items.length === 0) {
+        localStorage.removeItem("totalPrice");
+      }else{
+        localStorage.setItem("totalPrice", this.Total.toFixed(2));
+      }
     },
 
     add_one(item) {
@@ -946,14 +1247,17 @@ export default {
       }
       this.calc_stock_qty(item, item.qty);
       this.$forceUpdate();
+
+      localStorage.setItem("totalPrice", this.Total.toFixed(2));
     },
     subtract_one(item) {
-      item.qty--;
-      if (item.qty == 0) {
-        this.remove_item(item);
+      if(item.qty>1){
+        item.qty--;
+        this.calc_stock_qty(item, item.qty);
+        this.$forceUpdate();
       }
-      this.calc_stock_qty(item, item.qty);
-      this.$forceUpdate();
+
+      localStorage.setItem("totalPrice", this.Total.toFixed(2));
     },
 
     add_item(item) {
@@ -1070,7 +1374,28 @@ export default {
       return new_item;
     },
 
+    authorization_cancel_invoice(password) {
+      if (!password) {
+        this.$toast?.error?.("Ingrese el código de autorización");
+        return;
+      }
+
+      if (this.pos_profile.password_manager === password) {
+        this.show_invalid_password_warning = false; // Oculta el mensaje si es correcto
+        this.items.forEach((item) => {
+          this.total_cancel += item.rate;
+        });
+        this.history_auth("Cancelar Factura", this.total_cancel);
+        localStorage.removeItem("totalPrice");
+        this.cancel_invoice();
+      } else {
+        this.show_invalid_password_warning = true; // Muestra el mensaje si es incorrecto
+        this.$toast?.error?.("Código incorrecto");
+      }
+    },
+
     cancel_invoice() {
+      this.discount_authorization = false;
       const doc = this.get_invoice_doc();
       this.invoiceType = this.pos_profile.posa_default_sales_order
         ? "Order"
@@ -1469,6 +1794,7 @@ export default {
       if (!this.validate()) {
         return;
       }
+      localStorage.removeItem("totalPrice");
       if (this.invoice_doc.doctype == "Sales Order") {
         evntBus.$emit("show_payment", "true");
         const invoice_doc = await this.process_invoice_from_order();
@@ -1507,6 +1833,7 @@ export default {
     },
 
     validate() {
+      this.discount_authorization = false;
       let value = true;
       this.items.forEach((item) => {
         if (
@@ -2063,6 +2390,13 @@ export default {
       }
     },
 
+    shortRealoadInvoice(e) {
+      if (e.key === "k" && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault();
+        this.cancel_dialog = true;
+      }
+    },
+
     shortDeleteFirstItem(e) {
       if (e.key === "d" && (e.ctrlKey || e.metaKey)) {
         e.preventDefault();
@@ -2071,10 +2405,26 @@ export default {
     },
 
     shortOpenFirstItem(e) {
-      if (e.key === "a" && (e.ctrlKey || e.metaKey)) {
+      const isA = e.key === "a" || e.key === "A";
+      const hasCtrlOrMeta = e.ctrlKey || e.metaKey; // Ctrl (Win/Linux) o ⌘ (Mac)
+      const hasShift = e.shiftKey;
+
+      if (isA && hasCtrlOrMeta && hasShift) {
         e.preventDefault();
-        this.expanded = [];
-        this.expanded.push(this.items[0]);
+        if (!this.items || !this.items.length) return;
+
+        // Expandir solo el primero
+        this.expanded = [this.items[0]];
+
+        // Enfocar QTY cuando termine de renderizar
+        this.$nextTick(() => {
+          const r = this.$refs.qtyInput;
+          const el = r && r.$el ? r.$el.querySelector("input") : r;
+          if (el && el.focus) {
+            el.focus();
+            if (el.select) el.select();
+          }
+        });
       }
     },
 
@@ -2798,11 +3148,14 @@ export default {
         }, 0);
       }
     },
-    load_print_page(invoice_name) {
+
+    async load_print_page(invoice_name) {
       const print_format =
         this.pos_profile.print_format_for_online ||
         this.pos_profile.print_format;
+
       const letter_head = this.pos_profile.letter_head || 0;
+
       const url =
         frappe.urllib.get_base_url() +
         "/printview?doctype=Sales%20Invoice&name=" +
@@ -2812,17 +3165,31 @@ export default {
         print_format +
         "&no_letterhead=" +
         letter_head;
+
+      // ✅ Leaf-POS (Electron): imprime sin diálogo usando la impresora predeterminada
+      if (window.asteroid && typeof window.asteroid.printUrl === "function") {
+        const res = await window.asteroid.printUrl({ url });
+
+        // Fallback al comportamiento web si algo falla, para no detener la operación
+        if (!res || res.ok !== true) {
+          const w = window.open(url, "Print");
+          w.addEventListener("load", () => w.print(), true);
+        }
+        return;
+      }
+
+      // 🌐 Web normal: abre ventana y pide confirmación (comportamiento del navegador)
       const printWindow = window.open(url, "Print");
       printWindow.addEventListener(
         "load",
         function () {
           printWindow.print();
-          // printWindow.close();
-          // NOTE : uncomoent this to auto closing printing window
         },
         true
       );
     },
+
+
 
     print_draft_invoice() {
       if (!this.pos_profile.posa_allow_print_draft_invoices) {
@@ -2900,6 +3267,54 @@ export default {
       this.invoiceType = this.pos_profile.posa_default_sales_order
         ? "Order"
         : "Invoice";
+
+      if(this.pos_profile.secure_mode){
+        const totalPrice = localStorage.getItem('totalPrice');
+
+        this.total_price = totalPrice;
+        //const TAB_KEY = 'active_secure_tab';
+        const TAB_KEY = `active_secure_tab_${this.pos_profile.name}`; // ← clave única por perfil POS
+
+        // Si ya existe otra pestaña activa
+        if (localStorage.getItem(TAB_KEY)) {
+          alert('Ya hay otra pestaña del punto de venta activa. Esta se cerrará.');
+          window.location.href = 'about:blank'; // o window.location.href = 'about:blank';
+        } else {
+          // Marcar esta pestaña como activa
+          localStorage.setItem(TAB_KEY, Date.now().toString());
+
+          if(this.pos_profile.create_vale){
+            if (totalPrice && parseFloat(totalPrice) > 0) {
+              this.total_price = totalPrice;
+
+              this.pending_amount_auth_dialog = true;
+            }
+          }          
+
+          // Eliminar la marca cuando se cierre la pestaña
+          window.addEventListener('beforeunload', () => {
+            localStorage.removeItem(TAB_KEY);
+          });
+
+          // Escuchar si otra pestaña cambia la clave
+          window.addEventListener('storage', (event) => {
+            if (event.key === TAB_KEY && event.newValue) {
+              alert('Ya hay otra pestaña del punto de venta activa. Esta se cerrará.');
+              window.close();
+            }
+          });
+        }
+      }else{
+        if(this.pos_profile.create_vale){
+          const totalPrice = localStorage.getItem('totalPrice');
+
+          if (totalPrice && parseFloat(totalPrice) > 0) {
+              this.total_price = totalPrice;
+
+              this.pending_amount_auth_dialog = true;    
+          }
+        }
+      }
     });
     evntBus.$on("add_item", (item) => {
       this.add_item(item);
@@ -2956,6 +3371,13 @@ export default {
     evntBus.$on("set_new_line", (data) => {
       this.new_line = data;
     });
+    window.addEventListener("beforeunload", function (e) {
+      if (window.hasUnsavedProducts) {
+        e.preventDefault();
+        e.returnValue = '';
+        return '';
+      }
+    });
   },
   beforeDestroy() {
     evntBus.$off("register_pos_profile");
@@ -2973,14 +3395,23 @@ export default {
     document.addEventListener("keydown", this.shortDeleteFirstItem.bind(this));
     document.addEventListener("keydown", this.shortOpenFirstItem.bind(this));
     document.addEventListener("keydown", this.shortSelectDiscount.bind(this));
+    document.addEventListener("keydown", this.shortRealoadInvoice.bind(this));
   },
   destroyed() {
     document.removeEventListener("keydown", this.shortOpenPayment);
     document.removeEventListener("keydown", this.shortDeleteFirstItem);
     document.removeEventListener("keydown", this.shortOpenFirstItem);
     document.removeEventListener("keydown", this.shortSelectDiscount);
+    document.removeEventListener("keydown", this.shortRealoadInvoice);
   },
   watch: {
+    cancel_dialog(newVal) {
+      if (!newVal) {
+        this.cancel_password = "";
+        this.show_invalid_password_warning = false;
+      };
+    },
+
     customer() {
       this.close_payments();
       evntBus.$emit("set_customer", this.customer);
@@ -3001,13 +3432,6 @@ export default {
         value: this.discount_percentage_offer_name,
       });
     },
-    items: {
-      deep: true,
-      handler(items) {
-        this.handelOffers();
-        this.$forceUpdate();
-      },
-    },
     invoiceType() {
       evntBus.$emit("update_invoice_type", this.invoiceType);
     },
@@ -3020,6 +3444,15 @@ export default {
       } else {
         this.additional_discount_percentage = 0;
       }
+    },
+    items: {
+      deep: true,
+      handler(items) {
+        this.handelOffers();
+        this.$forceUpdate();
+        window.hasUnsavedProducts = items.length > 0;
+        console.log(' Productos en carrito:', window.hasUnsavedProducts);
+      },
     },
   },
 };
