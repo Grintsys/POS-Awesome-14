@@ -7,6 +7,7 @@ import json
 import frappe
 from frappe.utils import nowdate, flt, cstr, getdate
 from frappe import _
+from frappe.translate import get_user_lang
 from erpnext.accounts.doctype.sales_invoice.sales_invoice import get_bank_cash_account
 from erpnext.stock.get_item_details import get_item_details
 from erpnext.accounts.doctype.pos_profile.pos_profile import get_item_groups
@@ -649,6 +650,7 @@ def submit_invoice(invoice, data):
                 "posa_is_printed": 1,
             },
         )
+        request_lang = _resolve_invoice_lang()
         for invoice in invoices_list:
             enqueue(
                 method=submit_in_background_job,
@@ -662,6 +664,7 @@ def submit_invoice(invoice, data):
                     "total_cash": total_cash,
                     "cash_account": cash_account,
                     "payments": payments,
+                    "lang": request_lang,
                 },
             )
     else:
@@ -793,6 +796,20 @@ def redeeming_customer_credit(
             payment_entry_doc.submit()
 
 
+def _resolve_invoice_lang(invoice_doc=None, explicit_lang=None):
+    """Resolve the active language for POS invoice processing across web and RQ contexts."""
+    if explicit_lang:
+        return explicit_lang
+    owner = getattr(invoice_doc, "owner", None) if invoice_doc else None
+    user = owner or getattr(frappe.session, "user", None)
+    return (
+        (get_user_lang(user) if user else None)
+        or frappe.db.get_default("lang")
+        or getattr(frappe.local, "lang", None)
+        or "en"
+    )
+
+
 def submit_in_background_job(kwargs):
     invoice = kwargs.get("invoice")
     invoice_doc = kwargs.get("invoice_doc")
@@ -803,10 +820,15 @@ def submit_in_background_job(kwargs):
     payments = kwargs.get("payments")
 
     invoice_doc = frappe.get_doc("Sales Invoice", invoice)
-    invoice_doc.submit()
-    redeeming_customer_credit(
-        invoice_doc, data, is_payment_entry, total_cash, cash_account, payments
-    )
+    previous_lang = getattr(frappe.local, "lang", None)
+    frappe.local.lang = _resolve_invoice_lang(invoice_doc, kwargs.get("lang"))
+    try:
+        invoice_doc.submit()
+        redeeming_customer_credit(
+            invoice_doc, data, is_payment_entry, total_cash, cash_account, payments
+        )
+    finally:
+        frappe.local.lang = previous_lang
 
 
 @frappe.whitelist()
