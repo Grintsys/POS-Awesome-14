@@ -7,6 +7,8 @@
     <NewAddress></NewAddress>
     <MpesaPayments></MpesaPayments>
     <Variants></Variants>
+    <CashWithdrawalIncome />
+    <GiftCertificateDialog />
     <OpeningDialog v-if="dialog" :dialog="dialog"></OpeningDialog>
     <v-row v-show="!dialog">
       <v-col
@@ -76,6 +78,8 @@ import NewAddress from './NewAddress.vue';
 import Variants from './Variants.vue';
 import Returns from './Returns.vue';
 import MpesaPayments from './Mpesa-Payments.vue';
+import CashWithdrawalIncome from './CashWithdrawalIncome.vue';
+import GiftCertificateDialog from './GiftCertificateDialog.vue';
 
 export default {
   data: function () {
@@ -104,6 +108,8 @@ export default {
     Variants,
     MpesaPayments,
     SalesOrders,
+    CashWithdrawalIncome,
+    GiftCertificateDialog,
   },
 
   methods: {
@@ -144,6 +150,9 @@ export default {
           }
         });
     },
+    get_cash_income_data() {
+      return evntBus.$emit('open_cash_withdrawal_income', this.pos_opening_shift.name, this.pos_profile);
+    },
     submit_closing_pos(data) {
       frappe
         .call(
@@ -154,15 +163,45 @@ export default {
         )
         .then((r) => {
           if (r.message) {
+            const TAB_KEY = `active_secure_tab_${this.pos_profile.name}`;
+            localStorage.removeItem(TAB_KEY); // ← Esto evita conflictos futuros
+            localStorage.removeItem('totalPrice'); // ← Limpieza de precios pendientes, si aplica
+
             evntBus.$emit('show_mesage', {
               text: `POS Shift Closed`,
               color: 'success',
             });
             this.check_opening_entry();
+            this.load_print_page_close(r.message);
           } else {
             console.log(r);
           }
         });
+    },
+    load_print_page_close(nameMovement) {
+      const print_format =
+        this.pos_profile.print_format_for_online ||
+        this.pos_profile.close_pos_format;
+      const letter_head = this.pos_profile.letter_head || 0;
+      const url =
+        frappe.urllib.get_base_url() +
+        "/printview?doctype=POS%20Closing%20Shift&name=" +
+        nameMovement +
+        "&trigger_print=1" +
+        "&format=" +
+        print_format +
+        "&no_letterhead=" +
+        letter_head;
+      const printWindow = window.open(url, "Print");
+      printWindow.addEventListener(
+        "load",
+        function () {
+          printWindow.print();
+          // printWindow.close();
+          // NOTE : uncomoent this to auto closing printing window
+        },
+        true
+      );
     },
     get_offers(pos_profile) {
       return frappe
@@ -214,6 +253,19 @@ export default {
       });
       evntBus.$on('open_closing_dialog', () => {
         this.get_closing_data();
+      });
+      evntBus.$on('open_cash_witdrawal_income_dialog', () => {
+        this.get_cash_income_data();
+      });
+      evntBus.$on('open_emit_gift_certificate_dialog', () => {
+        evntBus.$emit(
+          'open_emit_gift_certificate',
+          this.pos_opening_shift.name,
+          this.pos_profile
+        );
+      });
+      evntBus.$on('open_inquiry_gift_certificate_dialog', () => {
+        evntBus.$emit('open_inquiry_gift_certificate', this.pos_profile);
       });
       evntBus.$on('submit_closing_pos', (data) => {
         this.submit_closing_pos(data);

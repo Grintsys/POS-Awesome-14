@@ -67,7 +67,8 @@ doctype_js = {
 # ------------
 
 # before_install = "posawesome.install.before_install"
-# after_install = "posawesome.install.after_install"
+after_install = "posawesome.posawesome.api.posapp.ensure_supervisor_role"
+after_migrate = ["posawesome.posawesome.api.posapp.ensure_supervisor_role"]
 # before_uninstall = "posawesome.uninstall.before_uninstall"
 after_uninstall = "posawesome.uninstall.after_uninstall"
 

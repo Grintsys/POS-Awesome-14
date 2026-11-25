@@ -1,19 +1,309 @@
 <template>
   <div>
-    <v-dialog v-model="cancel_dialog" max-width="330">
+    <v-dialog v-model="item_discount_dialog" max-width="380">
+      <v-card>
+        <v-card-title class="text-h5">
+          <span class="headline primary--text">{{ __("Autorización Requerida") }}</span>
+        </v-card-title>
+        <v-card-text>
+          <v-text-field
+            v-if="!is_pos_supervisor"
+            autofocus
+            v-model="auth_supervisor_user"
+            :label="__('Usuario Supervisor (correo o usuario)')"
+            type="text"
+            :name="'posa_sup_usr_' + auth_field_nonce"
+            autocomplete="off"
+            autocorrect="off"
+            autocapitalize="off"
+            :spellcheck="false"
+            dense
+            outlined
+            color="primary"
+            class="mb-2"
+          />
+          <v-text-field
+            v-if="!is_pos_supervisor"
+            v-model="item_discount_password"
+            :label="__('Contraseña del Supervisor')"
+            type="text"
+            :name="'posa_sup_key_' + auth_field_nonce"
+            autocomplete="off"
+            autocorrect="off"
+            autocapitalize="off"
+            :spellcheck="false"
+            dense
+            outlined
+            color="primary"
+            class="posa-masked-secret"
+            @keydown.enter="confirm_item_discount_authorization"
+          />
+        </v-card-text>
+        <v-card-actions>
+          <v-spacer />
+          <v-btn color="error" :loading="verifying_auth" @click="confirm_item_discount_authorization">
+            {{ __("Confirm") }}
+          </v-btn>
+          <v-btn color="warning" @click="closeItemDiscountDialog">
+            {{ __("Back") }}
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+    <v-dialog v-model="pending_amount_auth_dialog" max-width="420" persistent no-click-animation>
+      <v-card>
+        <v-card-title class="text-h5">
+          <span class="headline primary--text">{{ __('Autorización Requerida') }}</span>
+        </v-card-title>
+        <v-card-subtitle v-if="total_price">
+          {{ `Usted cerró la pestaña con una factura en proceso y un monto pendiente de ${total_price}` }}
+        </v-card-subtitle>
+        <v-card-text>
+          <v-text-field
+            v-if="!is_pos_supervisor"
+            autofocus
+            v-model="auth_supervisor_user"
+            :label="__('Usuario Supervisor (correo o usuario)')"
+            type="text"
+            :name="'posa_sup_usr_' + auth_field_nonce"
+            autocomplete="off"
+            autocorrect="off"
+            autocapitalize="off"
+            :spellcheck="false"
+            dense
+            outlined
+            color="primary"
+            class="mb-2"
+          ></v-text-field>
+          <v-text-field
+            v-if="!is_pos_supervisor"
+            v-model="auth_code"
+            :label="__('Contraseña del Supervisor')"
+            type="text"
+            :name="'posa_sup_key_' + auth_field_nonce"
+            autocomplete="off"
+            autocorrect="off"
+            autocapitalize="off"
+            :spellcheck="false"
+            hide-details
+            dense
+            outlined
+            color="primary"
+            class="posa-masked-secret"
+            @keydown.enter="verifyAuthorization"
+          ></v-text-field>
+          <div
+            v-if="auth_error"
+            style="color: red; font-size: 0.85rem; margin-top: 4px;"
+          >
+            {{ auth_error_message || __('Usuario o contraseña de supervisor incorrectos.') }}
+          </div>
+        </v-card-text>
+        <v-card-actions>
+          <v-spacer></v-spacer>
+          <v-btn color="success" :loading="verifying_auth" @click="verifyAuthorization">
+            {{ __('Autorizar') }}
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+    <v-dialog v-model="discount_auth_dialog" max-width="380">
+      <v-card>
+        <v-card-title class="text-h5">
+          <span class="headline warning--text">{{ __("Autorizar Descuento") }}</span>
+        </v-card-title>
+
+        <v-card-text>
+          <v-text-field
+            v-if="!is_pos_supervisor"
+            autofocus
+            v-model="auth_supervisor_user"
+            :label="__('Usuario Supervisor (correo o usuario)')"
+            type="text"
+            :name="'posa_sup_usr_' + auth_field_nonce"
+            autocomplete="off"
+            autocorrect="off"
+            autocapitalize="off"
+            :spellcheck="false"
+            dense
+            outlined
+            color="warning"
+            class="mb-2"
+          ></v-text-field>
+          <v-text-field
+            v-if="!is_pos_supervisor"
+            v-model="discount_password"
+            :label="__('Contraseña del Supervisor')"
+            type="text"
+            :name="'posa_sup_key_' + auth_field_nonce"
+            autocomplete="off"
+            autocorrect="off"
+            autocapitalize="off"
+            :spellcheck="false"
+            hide-details
+            dense
+            outlined
+            color="warning"
+            class="posa-masked-secret"
+            @keydown.enter="authorize_discount"
+          ></v-text-field>
+
+          <div
+            v-if="show_discount_password_warning"
+            style="color: red; font-size: 0.85rem; margin-top: 4px;"
+          >
+            {{ auth_error_message || __('Usuario o contraseña de supervisor incorrectos.') }}
+          </div>
+        </v-card-text>
+
+        <v-card-actions>
+          <v-spacer></v-spacer>
+          <v-btn color="success" :loading="verifying_auth" @click="authorize_discount">{{ __("Autorizar") }}</v-btn>
+          <v-btn color="warning" @click="closeDiscountDialog">{{ __("Anular") }}</v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+    <v-dialog v-model="remove_dialog" max-width="400">
+      <v-card>
+        <v-card-title class="text-h5">
+          <span class="headline error--text">
+            {{ __("Eliminar Producto?") }}
+          </span>
+        </v-card-title>
+
+        <v-card-text>
+          <v-text-field
+            v-if="!is_pos_supervisor"
+            autofocus
+            v-model="auth_supervisor_user"
+            :label="__('Usuario Supervisor (correo o usuario)')"
+            type="text"
+            :name="'posa_sup_usr_' + auth_field_nonce"
+            autocomplete="off"
+            autocorrect="off"
+            autocapitalize="off"
+            :spellcheck="false"
+            dense
+            outlined
+            color="primary"
+            class="mb-2"
+          ></v-text-field>
+          <v-text-field
+            v-if="!is_pos_supervisor"
+            v-model="remove_password"
+            :label="__('Contraseña del Supervisor')"
+            type="text"
+            :name="'posa_sup_key_' + auth_field_nonce"
+            autocomplete="off"
+            autocorrect="off"
+            autocapitalize="off"
+            :spellcheck="false"
+            dense
+            outlined
+            color="primary"
+            class="posa-masked-secret mb-2"
+          ></v-text-field>
+          <v-textarea
+            :autofocus="is_pos_supervisor"
+            v-model="remove_reason"
+            :label="__('Motivo de eliminación (obligatorio)')"
+            :name="'posa_reason_' + auth_field_nonce"
+            autocomplete="off"
+            rows="2"
+            auto-grow
+            hide-details
+            dense
+            outlined
+            color="primary"
+            @keydown.enter.prevent="authorization_remove_item"
+          ></v-textarea>
+
+          <div
+            v-if="show_remove_password_warning"
+            style="color: red; font-size: 0.85rem; margin-top: 4px;"
+          >
+            {{ auth_error_message || __('Verifique los datos e intente nuevamente.') }}
+          </div>
+        </v-card-text>
+
+        <v-card-actions>
+          <v-spacer></v-spacer>
+          <v-btn color="error" :loading="verifying_auth" @click="authorization_remove_item">
+            {{ __("Remove") }}
+          </v-btn>
+          <v-btn color="warning" @click="closeRemoveDialog">
+            {{ __("Volver") }}
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+    <v-dialog v-model="cancel_dialog" max-width="400">
       <v-card>
         <v-card-title class="text-h5">
           <span class="headline primary--text">{{
-            __("Cancel Current Invoice ?")
+            __("Anular Factura?")
           }}</span>
         </v-card-title>
+        <v-card-text>
+          <v-text-field
+            v-if="!is_pos_supervisor"
+            autofocus
+            v-model="auth_supervisor_user"
+            :label="__('Usuario Supervisor (correo o usuario)')"
+            type="text"
+            :name="'posa_sup_usr_' + auth_field_nonce"
+            autocomplete="off"
+            autocorrect="off"
+            autocapitalize="off"
+            :spellcheck="false"
+            dense
+            outlined
+            color="primary"
+            class="mb-2"
+          ></v-text-field>
+          <v-text-field
+            v-if="!is_pos_supervisor"
+            v-model="cancel_password"
+            :label="__('Contraseña del Supervisor')"
+            type="text"
+            :name="'posa_sup_key_' + auth_field_nonce"
+            autocomplete="off"
+            autocorrect="off"
+            autocapitalize="off"
+            :spellcheck="false"
+            dense
+            outlined
+            color="primary"
+            class="posa-masked-secret mb-2"
+          ></v-text-field>
+          <v-textarea
+            :autofocus="is_pos_supervisor"
+            v-model="cancel_reason"
+            :label="__('Motivo de anulación (obligatorio)')"
+            :name="'posa_reason_' + auth_field_nonce"
+            autocomplete="off"
+            rows="2"
+            auto-grow
+            hide-details
+            dense
+            outlined
+            color="primary"
+            @keydown.enter.prevent="authorization_cancel_invoice(cancel_password)"
+          ></v-textarea>
+          <div
+            v-if="show_invalid_password_warning"
+            style="color: red; font-size: 0.85rem; margin-top: 4px;"
+          >
+            {{ auth_error_message || __('Verifique los datos e intente nuevamente.') }}
+          </div>
+        </v-card-text>
         <v-card-actions>
           <v-spacer></v-spacer>
-          <v-btn color="error" @click="cancel_invoice">
-            {{ __("Cancel") }}
+          <v-btn color="error" :loading="verifying_auth" @click="authorization_cancel_invoice(cancel_password)">
+            {{ __("ANULAR") }}
           </v-btn>
           <v-btn color="warning" @click="cancel_dialog = false">
-            {{ __("Back") }}
+            {{ __("Volver") }}
           </v-btn>
         </v-card-actions>
       </v-card>
@@ -246,15 +536,11 @@
                       background-color="white"
                       hide-details
                       :value="formtFloat(item.qty)"
-                      @change="
-                        [
-                          setFormatedFloat(item, 'qty', null, false, $event),
-                          calc_stock_qty(item, $event),
-                        ]
-                      "
+                      @change="[ onQtyChange(item, $event) ]"
+                      @keydown.enter.prevent="onQtyEnter(item, $event)"   
+                      ref="qtyInput"                                      
                       :rules="[isNumber]"
-                      :disabled="!!item.posa_is_offer || !!item.posa_is_replace"
-                    ></v-text-field>
+                      :disabled="!!item.posa_is_offer || !!item.posa_is_replace" />
                   </v-col>
                   <v-col cols="4">
                     <v-select
@@ -320,32 +606,18 @@
                       background-color="white"
                       hide-details
                       :value="formtFloat(item.discount_percentage)"
-                      @change="
-                        [
-                          setFormatedCurrency(
-                            item,
-                            'discount_percentage',
-                            null,
-                            true,
-                            $event
-                          ),
-                          calc_prices(item, $event),
-                        ]
-                      "
+                      @click="open_item_discount_authorization(item)"
+                      @change="[
+                        setFormatedCurrency(item, 'discount_percentage', null, true, $event),
+                        calc_prices(item, $event),
+                      ]"
                       :rules="[isNumber]"
                       id="discount_percentage"
-                      :disabled="
-                        !!item.posa_is_offer ||
-                        !!item.posa_is_replace ||
-                        item.posa_offer_applied ||
-                        !pos_profile.posa_allow_user_to_edit_item_discount ||
-                        !!invoice_doc.is_return
-                          ? true
-                          : false
-                      "
+                      :readonly="!is_item_authorized(item) || !!item.posa_is_offer || !!item.posa_is_replace || item.posa_offer_applied || !!invoice_doc.is_return"
                       suffix="%"
-                    ></v-text-field>
+                    />
                   </v-col>
+
                   <v-col cols="4">
                     <v-text-field
                       dense
@@ -356,31 +628,15 @@
                       hide-details
                       :value="formtCurrency(item.discount_amount)"
                       :rules="[isNumber]"
-                      @change="
-                        [
-                          setFormatedCurrency(
-                            item,
-                            'discount_amount',
-                            null,
-                            true,
-                            $event
-                          ),
-                          ,
-                          calc_prices(item, $event),
-                        ]
-                      "
+                      @click="open_item_discount_authorization(item)"
+                      @change="[
+                        setFormatedCurrency(item, 'discount_amount', null, true, $event),
+                        calc_prices(item, $event),
+                      ]"
                       :prefix="currencySymbol(pos_profile.currency)"
                       id="discount_amount"
-                      :disabled="
-                        !!item.posa_is_offer ||
-                        !!item.posa_is_replace ||
-                        !!item.posa_offer_applied ||
-                        !pos_profile.posa_allow_user_to_edit_item_discount ||
-                        !!invoice_doc.is_return
-                          ? true
-                          : false
-                      "
-                    ></v-text-field>
+                      :readonly="!is_item_authorized(item) || !!item.posa_is_offer || !!item.posa_is_replace || !!item.posa_offer_applied || !!invoice_doc.is_return"
+                    />
                   </v-col>
                   <v-col cols="4">
                     <v-text-field
@@ -686,18 +942,17 @@
             >
               <v-text-field
                 :value="formtFloat(additional_discount_percentage)"
-                @change="
-                  [
-                    setFormatedFloat(
-                      additional_discount_percentage,
-                      'additional_discount_percentage',
-                      null,
-                      false,
-                      $event
-                    ),
-                    update_discount_umount(),
-                  ]
-                "
+                @click="open_discount_authorization"
+                @change="[
+                  setFormatedFloat(
+                    additional_discount_percentage,
+                    'additional_discount_percentage',
+                    null,
+                    false,
+                    $event
+                  ),
+                  update_discount_umount(),
+                ]"
                 :rules="[isNumber]"
                 :label="frappe._('Additional Discount %')"
                 suffix="%"
@@ -706,13 +961,7 @@
                 dense
                 color="warning"
                 hide-details
-                :disabled="
-                  !pos_profile.posa_allow_user_to_edit_additional_discount ||
-                  discount_percentage_offer_name
-                    ? true
-                    : false
-                "
-              ></v-text-field>
+                :readonly="!discount_authorization || !pos_profile.posa_allow_user_to_edit_additional_discount || !!discount_percentage_offer_name" />
             </v-col>
             <v-col cols="6" class="pa-1 mt-2">
               <v-text-field
@@ -750,7 +999,7 @@
                 color="warning"
                 dark
                 @click="get_draft_invoices"
-                >{{ __("Held") }}</v-btn
+                >{{ __("CARGAR") }}</v-btn
               >
             </v-col>
             <v-col
@@ -785,7 +1034,7 @@
                 color="error"
                 dark
                 @click="cancel_dialog = true"
-                >{{ __("Cancel") }}</v-btn
+                >{{ __("Anular") }}</v-btn
               >
             </v-col>
             <v-col cols="6" class="pa-1">
@@ -795,7 +1044,7 @@
                 color="accent"
                 dark
                 @click="new_invoice"
-                >{{ __("Save/New") }}</v-btn
+                >{{ __("GUARDAR") }}</v-btn
               >
             </v-col>
             <v-col class="pa-1">
@@ -805,7 +1054,7 @@
                 color="success"
                 @click="show_payment"
                 dark
-                >{{ __("PAY") }}</v-btn
+                >{{ __("PAGAR") }}</v-btn
               >
             </v-col>
             <v-col
@@ -838,6 +1087,33 @@ export default {
   mixins: [format],
   data() {
     return {
+      item_discount_authorization_items: [],
+      current_item_pending_auth: null,
+      item_discount_dialog: false,
+      item_discount_password: "",
+      discount_auth_dialog: false,
+      pending_amount_auth_dialog: false,
+      total_price: 0,
+      auth_code: '',
+      auth_supervisor_user: '',
+      auth_field_nonce: Date.now().toString(36),
+      auth_error_message: '',
+      is_pos_supervisor: false,
+      verifying_auth: false,
+      auth_error: false,
+      discount_password: "",
+      show_discount_password_warning: false,
+      discount_authorization: false,
+      total_cancel: 0,
+      remove_dialog: false,
+      remove_password: "",
+      remove_reason: "",
+      show_remove_password_warning: false,
+      item_to_remove: null,
+      cancel_dialog: false,
+      cancel_password: "",
+      cancel_reason: "",
+      show_invalid_password_warning: false,
       pos_profile: "",
       pos_opening_shift: "",
       stock_settings: "",
@@ -859,7 +1135,6 @@ export default {
       itemsPerPage: 1000,
       expanded: [],
       singleExpand: true,
-      cancel_dialog: false,
       float_precision: 2,
       currency_precision: 2,
       new_line: false,
@@ -912,6 +1187,7 @@ export default {
       });
       sum -= this.flt(this.discount_amount);
       sum += this.flt(this.delivery_charges_rate);
+      this.total_cancel = this.flt(sum, this.currency_precision);
       return this.flt(sum, this.currency_precision);
     },
     total_items_discount_amount() {
@@ -924,7 +1200,329 @@ export default {
   },
 
   methods: {
+    reset_auth_fields() {
+      this.auth_supervisor_user = '';
+      this.auth_code = '';
+      this.item_discount_password = '';
+      this.discount_password = '';
+      this.remove_password = '';
+      this.remove_reason = '';
+      this.cancel_password = '';
+      this.cancel_reason = '';
+      this.auth_error_message = '';
+      this.auth_field_nonce = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+    },
+
+    get_leaf_pos_snapshot() {
+      const itemsCount = Array.isArray(this.items)
+        ? this.items.reduce((acc, it) => acc + (Number(it.qty) || 0), 0)
+        : 0;
+      const pendingTotal = Number(this.Total) || 0;
+      const hasPendingItems = Array.isArray(this.items) && this.items.length > 0 && pendingTotal > 0;
+      const shiftName =
+        this.pos_opening_shift && this.pos_opening_shift.name
+          ? this.pos_opening_shift.name
+          : null;
+      const hasOpenShift = Boolean(
+        shiftName &&
+          (!this.pos_opening_shift.status || this.pos_opening_shift.status === 'Open')
+      );
+      return {
+        hasPendingItems,
+        itemsCount,
+        pendingTotal,
+        currency: (this.pos_profile && this.pos_profile.currency) || 'HNL',
+        invoiceName: (this.invoice_doc && this.invoice_doc.name) || null,
+        hasOpenShift,
+        shiftName,
+        posProfile: (this.pos_profile && this.pos_profile.name) || null,
+        user: (window.frappe && frappe.session && frappe.session.user) || null,
+        capturedAt: new Date().toISOString(),
+      };
+    },
+
+    report_leaf_pos_snapshot() {
+      try {
+        const snapshot = this.get_leaf_pos_snapshot();
+        if (window.leafShell && typeof window.leafShell.reportSnapshot === 'function') {
+          window.leafShell.reportSnapshot(snapshot);
+        }
+      } catch (err) {
+        console.warn('leafPos snapshot report skipped:', err);
+      }
+    },
+
+    register_leaf_pos_contract() {
+      const vm = this;
+      window.leafPos = {
+        contract: '1.0',
+        getSnapshot() {
+          return vm.get_leaf_pos_snapshot();
+        },
+        async canClose() {
+          const snap = vm.get_leaf_pos_snapshot();
+          if (snap.hasPendingItems) {
+            return {
+              allowed: false,
+              reason: 'pending_items',
+              message: __('Hay productos sin facturar en el carrito.'),
+            };
+          }
+          if (snap.hasOpenShift) {
+            return {
+              allowed: false,
+              reason: 'open_shift',
+              message: __('Debe realizar el cierre de caja antes de salir.'),
+            };
+          }
+          return {
+            allowed: true,
+            reason: null,
+            message: '',
+          };
+        },
+      };
+      this.report_leaf_pos_snapshot();
+    },
+
+    server_authorize(code, type, amount, options = {}) {
+      // Supervisor credentials are verified on the server (never stored or autofilled in the browser).
+      // The server records the cashier (`user`), supervisor (`authorized_by`), and `reason` in
+      // "Historial de autorizaciones en POS".
+      const supervisor_user =
+        options.supervisor_user !== undefined
+          ? options.supervisor_user
+          : this.is_pos_supervisor
+          ? ''
+          : (this.auth_supervisor_user || '').trim();
+      const reason = options.reason !== undefined ? options.reason : '';
+
+      return new Promise((resolve) => {
+        frappe.call({
+          method: 'posawesome.posawesome.api.posapp.verify_authorization',
+          args: {
+            pos_profile: this.pos_profile.name,
+            code: code || '',
+            type: type,
+            amount: amount || 0,
+            supervisor_user: supervisor_user,
+            reason: reason,
+            pos_opening_shift:
+              (this.pos_opening_shift && this.pos_opening_shift.name) || '',
+            invoice_name: (this.invoice_doc && this.invoice_doc.name) || '',
+          },
+          callback: (r) => {
+            const res = r.message || { authorized: false, reason: 'invalid' };
+            if (!res.authorized) {
+              this.auth_error_message =
+                res.message || __('Usuario o contraseña de supervisor incorrectos.');
+              evntBus.$emit('show_mesage', {
+                text: this.auth_error_message,
+                color: 'error',
+              });
+            }
+            resolve(res);
+          },
+          error: () => resolve({ authorized: false, reason: 'error' }),
+        });
+      });
+    },
+
+    async verifyAuthorization() {
+      if (this.verifying_auth) return;
+      if (!this.is_pos_supervisor && (!(this.auth_supervisor_user || '').trim() || !this.auth_code)) {
+        this.auth_error = true;
+        this.auth_error_message = __('Ingrese el usuario y la contraseña del supervisor.');
+        evntBus.$emit('show_mesage', { text: this.auth_error_message, color: 'error' });
+        return;
+      }
+      const totalPrice = localStorage.getItem('totalPrice');
+      this.verifying_auth = true;
+      const res = await this.server_authorize(this.auth_code, 'Monto pendiente', totalPrice);
+      this.verifying_auth = false;
+
+      if (!res.authorized) {
+        this.auth_error = true;
+        this.auth_code = '';
+        return;
+      }
+
+      this.pending_amount_auth_dialog = false;
+      this.auth_error = false;
+      this.reset_auth_fields();
+      localStorage.removeItem('totalPrice');
+
+      const args = {
+        amount: totalPrice,
+        pos_opening_shift: this.pos_opening_shift.name,
+        note: 'Se cerró la pestaña con una factura en proceso y un monto pendiente de ' + totalPrice,
+        type_transaction: 'Ingreso',
+      };
+
+      frappe.call({
+        method: 'posawesome.posawesome.api.posapp.create_withdrawal_income',
+        args,
+        callback: (r) => {
+          if (r.exc || !r.message || !r.message.name) {
+            frappe.utils.play_sound('error');
+          }
+        },
+      });
+    },
+
+    async open_item_discount_authorization(item) {
+      if (this.is_item_authorized(item)) return;
+      this.current_item_pending_auth = item;
+      this.reset_auth_fields();
+      if (this.is_pos_supervisor) {
+        await this.confirm_item_discount_authorization();
+        return;
+      }
+      this.item_discount_dialog = true;
+    },
+    closeItemDiscountDialog() {
+      this.item_discount_dialog = false;
+      this.reset_auth_fields();
+    },
+    is_item_authorized(item) {
+      return this.item_discount_authorization_items.includes(item);
+    },
+    async confirm_item_discount_authorization() {
+      if (this.verifying_auth) return;
+      if (!this.is_pos_supervisor && (!(this.auth_supervisor_user || '').trim() || !this.item_discount_password)) {
+        evntBus.$emit('show_mesage', {
+          text: __('Ingrese el usuario y la contraseña del supervisor.'),
+          color: 'error',
+        });
+        return;
+      }
+      this.verifying_auth = true;
+      const res = await this.server_authorize(this.item_discount_password, 'Descuento Producto', 0);
+      this.verifying_auth = false;
+      if (res.authorized) {
+        this.item_discount_authorization_items.push(this.current_item_pending_auth);
+        this.item_discount_dialog = false;
+        this.reset_auth_fields();
+      } else {
+        this.item_discount_password = '';
+      }
+    },
+
+    async open_discount_authorization() {
+      if (this.discount_authorization) return;
+      this.reset_auth_fields();
+      if (this.is_pos_supervisor) {
+        await this.authorize_discount();
+        return;
+      }
+      this.discount_auth_dialog = true;
+    },
+
+    async authorize_discount() {
+      if (!this.is_pos_supervisor && (!(this.auth_supervisor_user || '').trim() || !this.discount_password)) {
+        evntBus.$emit('show_mesage', {
+          text: __('Ingrese el usuario y la contraseña del supervisor.'),
+          color: 'error',
+        });
+        return;
+      }
+      if (this.verifying_auth) return;
+      this.verifying_auth = true;
+      const res = await this.server_authorize(this.discount_password, 'Descuento Factura', 0);
+      this.verifying_auth = false;
+
+      if (res.authorized) {
+        this.discount_authorization = true;
+        this.$nextTick(() => {
+          // da foco al campo después de autorizar
+          this.$refs.percentage_discount?.focus();
+        });
+        this.closeDiscountDialog();
+      } else {
+        this.show_discount_password_warning = true;
+        this.discount_password = '';
+      }
+    },
+
+    closeDiscountDialog() {
+      this.discount_auth_dialog = false;
+      this.show_discount_password_warning = false;
+      this.reset_auth_fields();
+    },
+
+    onQtyChange(item, value) {
+      let qty = parseFloat(value);
+
+      if (isNaN(qty) || qty == 0) {
+        qty = 1; // fuerza el valor mínimo
+      }
+
+      this.setFormatedFloat(item, 'qty', null, false, qty);
+      this.calc_stock_qty(item, qty);
+    },
+
+    onQtyEnter(item, evt) {
+      const val = evt && evt.target ? evt.target.value : item.qty;
+
+      // 1) Guardar la cantidad (tu lógica existente)
+      this.onQtyChange(item, val);
+
+      // 2) Cerrar el panel/ítem expandido
+      this.expanded = [];
+
+      // 3) Después del re-render, regresar el foco al buscador
+      this.$nextTick(() => {
+        evntBus.$emit("focus-search");
+      });
+    },
+
     remove_item(item) {
+      this.item_to_remove = item;
+      this.reset_auth_fields();
+      this.remove_dialog = true;
+    },
+
+    closeRemoveDialog() {
+      this.remove_dialog = false;
+      this.show_remove_password_warning = false;
+      this.item_to_remove = null;
+      this.reset_auth_fields();
+    },
+
+    async authorization_remove_item() {
+      const reason = (this.remove_reason || '').trim();
+      if (!reason) {
+        this.show_remove_password_warning = true;
+        this.auth_error_message = __('Debe ingresar el motivo de la eliminación.');
+        evntBus.$emit('show_mesage', { text: this.auth_error_message, color: 'error' });
+        return;
+      }
+      if (!this.is_pos_supervisor && (!(this.auth_supervisor_user || '').trim() || !this.remove_password)) {
+        this.show_remove_password_warning = true;
+        this.auth_error_message = __('Ingrese el usuario y la contraseña del supervisor.');
+        evntBus.$emit('show_mesage', { text: this.auth_error_message, color: 'error' });
+        return;
+      }
+      if (this.verifying_auth || !this.item_to_remove) return;
+
+      const item = this.item_to_remove;
+      const price_item = this.flt(item.price_list_rate) * this.flt(item.qty);
+      this.verifying_auth = true;
+      const res = await this.server_authorize(this.remove_password, 'Eliminar Producto', price_item, {
+        reason: reason,
+      });
+      this.verifying_auth = false;
+
+      if (res.authorized) {
+        this.removeSelectedItem(item);
+        this.closeRemoveDialog();
+      } else {
+        this.show_remove_password_warning = true;
+        this.remove_password = '';
+      }
+    },
+
+    removeSelectedItem(item) {
       const index = this.items.findIndex(
         (el) => el.posa_row_id == item.posa_row_id
       );
@@ -937,6 +1535,12 @@ export default {
       if (idx >= 0) {
         this.expanded.splice(idx, 1);
       }
+
+      if (this.items.length === 0) {
+        localStorage.removeItem("totalPrice");
+      }else{
+        localStorage.setItem("totalPrice", this.Total.toFixed(2));
+      }
     },
 
     add_one(item) {
@@ -946,14 +1550,17 @@ export default {
       }
       this.calc_stock_qty(item, item.qty);
       this.$forceUpdate();
+
+      localStorage.setItem("totalPrice", this.Total.toFixed(2));
     },
     subtract_one(item) {
-      item.qty--;
-      if (item.qty == 0) {
-        this.remove_item(item);
+      if(item.qty>1){
+        item.qty--;
+        this.calc_stock_qty(item, item.qty);
+        this.$forceUpdate();
       }
-      this.calc_stock_qty(item, item.qty);
-      this.$forceUpdate();
+
+      localStorage.setItem("totalPrice", this.Total.toFixed(2));
     },
 
     add_item(item) {
@@ -1070,7 +1677,46 @@ export default {
       return new_item;
     },
 
+    async authorization_cancel_invoice(password) {
+      const reason = (this.cancel_reason || '').trim();
+      if (!reason) {
+        this.show_invalid_password_warning = true;
+        this.auth_error_message = __('Debe ingresar el motivo de la anulación.');
+        evntBus.$emit('show_mesage', { text: this.auth_error_message, color: 'error' });
+        return;
+      }
+      if (!this.is_pos_supervisor && (!(this.auth_supervisor_user || '').trim() || !password)) {
+        this.show_invalid_password_warning = true;
+        this.auth_error_message = __('Ingrese el usuario y la contraseña del supervisor.');
+        evntBus.$emit('show_mesage', { text: this.auth_error_message, color: 'error' });
+        return;
+      }
+      if (this.verifying_auth) return;
+
+      const total = this.items.reduce(
+        (sum, item) => sum + this.flt(item.rate) * this.flt(item.qty),
+        0
+      );
+      this.verifying_auth = true;
+      const res = await this.server_authorize(password, 'Cancelar Factura', total, {
+        reason: reason,
+      });
+      this.verifying_auth = false;
+
+      if (res.authorized) {
+        this.show_invalid_password_warning = false;
+        this.total_cancel = this.flt(total, this.currency_precision);
+        this.reset_auth_fields();
+        localStorage.removeItem('totalPrice');
+        this.cancel_invoice();
+      } else {
+        this.show_invalid_password_warning = true;
+        this.cancel_password = '';
+      }
+    },
+
     cancel_invoice() {
+      this.discount_authorization = false;
       const doc = this.get_invoice_doc();
       this.invoiceType = this.pos_profile.posa_default_sales_order
         ? "Order"
@@ -1469,6 +2115,7 @@ export default {
       if (!this.validate()) {
         return;
       }
+      localStorage.removeItem("totalPrice");
       if (this.invoice_doc.doctype == "Sales Order") {
         evntBus.$emit("show_payment", "true");
         const invoice_doc = await this.process_invoice_from_order();
@@ -1507,6 +2154,7 @@ export default {
     },
 
     validate() {
+      this.discount_authorization = false;
       let value = true;
       this.items.forEach((item) => {
         if (
@@ -2063,6 +2711,13 @@ export default {
       }
     },
 
+    shortRealoadInvoice(e) {
+      if (e.key === "k" && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault();
+        this.cancel_dialog = true;
+      }
+    },
+
     shortDeleteFirstItem(e) {
       if (e.key === "d" && (e.ctrlKey || e.metaKey)) {
         e.preventDefault();
@@ -2071,10 +2726,26 @@ export default {
     },
 
     shortOpenFirstItem(e) {
-      if (e.key === "a" && (e.ctrlKey || e.metaKey)) {
+      const isA = e.key === "a" || e.key === "A";
+      const hasCtrlOrMeta = e.ctrlKey || e.metaKey; // Ctrl (Win/Linux) o ⌘ (Mac)
+      const hasShift = e.shiftKey;
+
+      if (isA && hasCtrlOrMeta && hasShift) {
         e.preventDefault();
-        this.expanded = [];
-        this.expanded.push(this.items[0]);
+        if (!this.items || !this.items.length) return;
+
+        // Expandir solo el primero
+        this.expanded = [this.items[0]];
+
+        // Enfocar QTY cuando termine de renderizar
+        this.$nextTick(() => {
+          const r = this.$refs.qtyInput;
+          const el = r && r.$el ? r.$el.querySelector("input") : r;
+          if (el && el.focus) {
+            el.focus();
+            if (el.select) el.select();
+          }
+        });
       }
     },
 
@@ -2798,11 +3469,14 @@ export default {
         }, 0);
       }
     },
-    load_print_page(invoice_name) {
+
+    async load_print_page(invoice_name) {
       const print_format =
         this.pos_profile.print_format_for_online ||
         this.pos_profile.print_format;
+
       const letter_head = this.pos_profile.letter_head || 0;
+
       const url =
         frappe.urllib.get_base_url() +
         "/printview?doctype=Sales%20Invoice&name=" +
@@ -2812,17 +3486,34 @@ export default {
         print_format +
         "&no_letterhead=" +
         letter_head;
+
+      // ✅ Leaf-POS (Electron): imprime sin diálogo usando la impresora predeterminada
+      const shellPrinter =
+        (window.leafShell && typeof window.leafShell.printUrl === "function" && window.leafShell) ||
+        (window.asteroid && typeof window.asteroid.printUrl === "function" && window.asteroid);
+      if (shellPrinter) {
+        const res = await shellPrinter.printUrl({ url });
+
+        // Fallback al comportamiento web si algo falla, para no detener la operación
+        if (!res || res.ok !== true) {
+          const w = window.open(url, "Print");
+          w.addEventListener("load", () => w.print(), true);
+        }
+        return;
+      }
+
+      // 🌐 Web normal: abre ventana y pide confirmación (comportamiento del navegador)
       const printWindow = window.open(url, "Print");
       printWindow.addEventListener(
         "load",
         function () {
           printWindow.print();
-          // printWindow.close();
-          // NOTE : uncomoent this to auto closing printing window
         },
         true
       );
     },
+
+
 
     print_draft_invoice() {
       if (!this.pos_profile.posa_allow_print_draft_invoices) {
@@ -2888,11 +3579,16 @@ export default {
   },
 
   mounted() {
+    this.register_leaf_pos_contract();
     evntBus.$on("register_pos_profile", (data) => {
       this.pos_profile = data.pos_profile;
+      this.is_pos_supervisor = Boolean(
+        data.is_pos_supervisor || (data.pos_profile && data.pos_profile.is_pos_supervisor)
+      );
       this.customer = data.pos_profile.customer;
       this.pos_opening_shift = data.pos_opening_shift;
       this.stock_settings = data.stock_settings;
+      this.report_leaf_pos_snapshot();
       this.float_precision =
         frappe.defaults.get_default("float_precision") || 2;
       this.currency_precision =
@@ -2900,6 +3596,54 @@ export default {
       this.invoiceType = this.pos_profile.posa_default_sales_order
         ? "Order"
         : "Invoice";
+
+      if(this.pos_profile.secure_mode){
+        const totalPrice = localStorage.getItem('totalPrice');
+
+        this.total_price = totalPrice;
+        //const TAB_KEY = 'active_secure_tab';
+        const TAB_KEY = `active_secure_tab_${this.pos_profile.name}`; // ← clave única por perfil POS
+
+        // Si ya existe otra pestaña activa
+        if (localStorage.getItem(TAB_KEY)) {
+          alert('Ya hay otra pestaña del punto de venta activa. Esta se cerrará.');
+          window.location.href = 'about:blank'; // o window.location.href = 'about:blank';
+        } else {
+          // Marcar esta pestaña como activa
+          localStorage.setItem(TAB_KEY, Date.now().toString());
+
+          if(this.pos_profile.create_vale){
+            if (totalPrice && parseFloat(totalPrice) > 0) {
+              this.total_price = totalPrice;
+
+              this.pending_amount_auth_dialog = true;
+            }
+          }          
+
+          // Eliminar la marca cuando se cierre la pestaña
+          window.addEventListener('beforeunload', () => {
+            localStorage.removeItem(TAB_KEY);
+          });
+
+          // Escuchar si otra pestaña cambia la clave
+          window.addEventListener('storage', (event) => {
+            if (event.key === TAB_KEY && event.newValue) {
+              alert('Ya hay otra pestaña del punto de venta activa. Esta se cerrará.');
+              window.close();
+            }
+          });
+        }
+      }else{
+        if(this.pos_profile.create_vale){
+          const totalPrice = localStorage.getItem('totalPrice');
+
+          if (totalPrice && parseFloat(totalPrice) > 0) {
+              this.total_price = totalPrice;
+
+              this.pending_amount_auth_dialog = true;    
+          }
+        }
+      }
     });
     evntBus.$on("add_item", (item) => {
       this.add_item(item);
@@ -2956,6 +3700,13 @@ export default {
     evntBus.$on("set_new_line", (data) => {
       this.new_line = data;
     });
+    window.addEventListener("beforeunload", function (e) {
+      if (window.hasUnsavedProducts) {
+        e.preventDefault();
+        e.returnValue = '';
+        return '';
+      }
+    });
   },
   beforeDestroy() {
     evntBus.$off("register_pos_profile");
@@ -2973,14 +3724,27 @@ export default {
     document.addEventListener("keydown", this.shortDeleteFirstItem.bind(this));
     document.addEventListener("keydown", this.shortOpenFirstItem.bind(this));
     document.addEventListener("keydown", this.shortSelectDiscount.bind(this));
+    document.addEventListener("keydown", this.shortRealoadInvoice.bind(this));
   },
   destroyed() {
     document.removeEventListener("keydown", this.shortOpenPayment);
     document.removeEventListener("keydown", this.shortDeleteFirstItem);
     document.removeEventListener("keydown", this.shortOpenFirstItem);
     document.removeEventListener("keydown", this.shortSelectDiscount);
+    document.removeEventListener("keydown", this.shortRealoadInvoice);
   },
   watch: {
+    cancel_dialog(newVal) {
+      this.reset_auth_fields();
+      if (!newVal) {
+        this.show_invalid_password_warning = false;
+      }
+    },
+
+    pos_opening_shift() {
+      this.report_leaf_pos_snapshot();
+    },
+
     customer() {
       this.close_payments();
       evntBus.$emit("set_customer", this.customer);
@@ -3001,13 +3765,6 @@ export default {
         value: this.discount_percentage_offer_name,
       });
     },
-    items: {
-      deep: true,
-      handler(items) {
-        this.handelOffers();
-        this.$forceUpdate();
-      },
-    },
     invoiceType() {
       evntBus.$emit("update_invoice_type", this.invoiceType);
     },
@@ -3021,6 +3778,16 @@ export default {
         this.additional_discount_percentage = 0;
       }
     },
+    items: {
+      deep: true,
+      handler(items) {
+        this.handelOffers();
+        this.$forceUpdate();
+        window.hasUnsavedProducts = items.length > 0;
+        this.report_leaf_pos_snapshot();
+        console.log(' Productos en carrito:', window.hasUnsavedProducts);
+      },
+    },
   },
 };
 </script>
@@ -3031,5 +3798,9 @@ export default {
 }
 .disable-events {
   pointer-events: none;
+}
+.posa-masked-secret ::v-deep input {
+  -webkit-text-security: disc !important;
+  text-security: disc !important;
 }
 </style>
