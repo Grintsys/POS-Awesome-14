@@ -6,7 +6,11 @@ from unittest.mock import patch
 
 import frappe
 from frappe.tests.utils import FrappeTestCase
-from frappe.utils.password import get_decrypted_password, set_encrypted_password
+from frappe.utils.password import (
+    get_decrypted_password,
+    set_encrypted_password,
+    update_password,
+)
 
 from posawesome.posawesome.api import posapp
 
@@ -39,10 +43,45 @@ class TestPosAppSecurity(FrappeTestCase):
             frappe.db.rollback()
 
     def _clear_attempts(self):
-        for user in ("Administrator", "Guest"):
+        for user in (
+            "Administrator",
+            "Guest",
+            "test_pos_supervisor@example.com",
+            "test_pos_cashier@example.com",
+        ):
             frappe.cache().delete_value(
                 "posa_auth_failures:{0}:{1}".format(user, self.profile)
             )
+            frappe.cache().delete_value(
+                "posa_auth_sup_failures:{0}:{1}".format(user, self.profile)
+            )
+
+    def _ensure_test_user(self, email, username, password, roles):
+        posapp.ensure_supervisor_role()
+        if not frappe.db.exists("User", email):
+            user = frappe.get_doc(
+                {
+                    "doctype": "User",
+                    "email": email,
+                    "first_name": username,
+                    "username": username,
+                    "enabled": 1,
+                    "send_welcome_email": 0,
+                }
+            )
+            user.insert(ignore_permissions=True)
+        else:
+            user = frappe.get_doc("User", email)
+            user.username = username
+            user.enabled = 1
+            user.save(ignore_permissions=True)
+
+        user.roles = []
+        for r in roles:
+            user.append("roles", {"role": r})
+        user.save(ignore_permissions=True)
+        update_password(email, password)
+        return email
 
     def _history_count(self, auth_type):
         return frappe.db.count(
@@ -211,3 +250,146 @@ class TestPosAppSecurity(FrappeTestCase):
         with patch.object(posapp.frappe.db, "get_value", return_value=None):
             with self.assertRaises(frappe.ValidationError):
                 posapp._validate_cash_movement(10, "S1", "Ingreso")
+
+    # ---- Phase 2: Supervisor POS Profile user+password, reason & unexpected close ----
+
+    def test_supervisor_role_and_user_password_authorization(self):
+        sup_email = self._ensure_test_user(
+            "test_pos_supervisor@example.com",
+            "sup_pos_test",
+            "SupSecret#2026",
+            ["Sales User", posapp.SUPERVISOR_ROLE],
+        )
+        cashier_email = self._ensure_test_user(
+            "test_pos_cashier@example.com",
+            "cajero_pos_test",
+            "CashierSecret#2026",
+            ["Sales User"],
+        )
+        self.assertTrue(frappe.db.exists("Role", posapp.SUPERVISOR_ROLE))
+
+        frappe.set_user(cashier_email)
+        # Authorize using supervisor username + password
+        res = posapp.verify_authorization(
+            self.profile,
+            code="SupSecret#2026",
+            type="Descuento Factura",
+            amount=50,
+            supervisor_user="sup_pos_test",
+        )
+        self.assertTrue(res["authorized"])
+        self.assertEqual(res["authorized_by"], sup_email)
+        row = frappe.get_doc("Historial de autorizaciones en POS", res["history"])
+        self.assertEqual(row.user, cashier_email)
+        self.assertEqual(row.authorized_by, sup_email)
+
+        # Wrong supervisor password fails
+        bad = posapp.verify_authorization(
+            self.profile,
+            code="ClaveErronea",
+            type="Descuento Factura",
+            amount=50,
+            supervisor_user=sup_email,
+        )
+        self.assertFalse(bad["authorized"])
+        self.assertEqual(bad["reason"], "invalid")
+
+    def test_administrator_and_non_supervisor_are_rejected(self):
+        cashier_email = self._ensure_test_user(
+            "test_pos_cashier@example.com",
+            "cajero_pos_test",
+            "CashierSecret#2026",
+            ["Sales User"],
+        )
+        frappe.set_user(cashier_email)
+
+        # Decision 4: Administrator cannot be used as authorizing supervisor
+        admin_res = posapp.verify_authorization(
+            self.profile,
+            code="any",
+            type="Descuento Producto",
+            amount=0,
+            supervisor_user="Administrator",
+        )
+        self.assertFalse(admin_res["authorized"])
+        self.assertEqual(admin_res["reason"], "invalid_supervisor")
+
+        # Decision 1: A user without "Supervisor POS Profile" role cannot authorize
+        non_sup = posapp.verify_authorization(
+            self.profile,
+            code="CashierSecret#2026",
+            type="Descuento Producto",
+            amount=0,
+            supervisor_user=cashier_email,
+        )
+        self.assertFalse(non_sup["authorized"])
+        self.assertEqual(non_sup["reason"], "not_supervisor")
+
+    def test_self_supervisor_auto_authorizes_and_requires_reason_on_cancel_or_delete(self):
+        sup_email = self._ensure_test_user(
+            "test_pos_supervisor@example.com",
+            "sup_pos_test",
+            "SupSecret#2026",
+            ["Sales User", posapp.SUPERVISOR_ROLE],
+        )
+        frappe.set_user(sup_email)
+        data = {}
+        posapp.update_opening_shift_data(data, self.profile)
+        self.assertTrue(data["is_pos_supervisor"])
+
+        # Discount does not require password or reason when logged in as supervisor
+        disc_res = posapp.verify_authorization(
+            self.profile, code="", type="Descuento Producto", amount=0
+        )
+        self.assertTrue(disc_res["authorized"])
+        self.assertEqual(disc_res["authorized_by"], sup_email)
+
+        # Cancel Invoice and Delete Item require a non-empty reason (Decision 3)
+        no_reason = posapp.verify_authorization(
+            self.profile, code="", type="Cancelar Factura", amount=120, reason="   "
+        )
+        self.assertFalse(no_reason["authorized"])
+        self.assertEqual(no_reason["reason"], "missing_reason")
+
+        with_reason = posapp.verify_authorization(
+            self.profile,
+            code="",
+            type="Cancelar Factura",
+            amount=120,
+            reason="Cliente solicitó cambio de método de pago",
+        )
+        self.assertTrue(with_reason["authorized"])
+        row = frappe.get_doc("Historial de autorizaciones en POS", with_reason["history"])
+        self.assertEqual(row.user, sup_email)
+        self.assertEqual(row.authorized_by, sup_email)
+        self.assertEqual(row.reason, "Cliente solicitó cambio de método de pago")
+
+    def test_register_unexpected_close_is_idempotent_by_client_session_id(self):
+        session_uuid = "sess-test-" + frappe.generate_hash(length=10)
+        first = posapp.register_unexpected_close(
+            client_session_id=session_uuid,
+            pos_profile=self.profile,
+            pending_total=1250.0,
+            currency="HNL",
+            items_count=3,
+            reason="render-process-gone",
+            machine_name="CAJA-01-PC",
+            app_version="1.1.0",
+        )
+        self.assertTrue(first["ok"])
+        self.assertFalse(first["duplicate"])
+        self.assertTrue(first["voucher"].startswith("HIS-POS-"))
+
+        second = posapp.register_unexpected_close(
+            client_session_id=session_uuid,
+            pos_profile=self.profile,
+            pending_total=1250.0,
+            currency="HNL",
+            items_count=3,
+            reason="render-process-gone",
+            machine_name="CAJA-01-PC",
+            app_version="1.1.0",
+        )
+        self.assertTrue(second["ok"])
+        self.assertTrue(second["duplicate"])
+        self.assertEqual(second["voucher"], first["voucher"])

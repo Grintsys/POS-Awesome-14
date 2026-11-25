@@ -11,8 +11,14 @@
   "type",
   "date_time",
   "pos_profile",
+  "pos_opening_shift",
   "user",
+  "authorized_by",
   "amount",
+  "invoice_name",
+  "reason",
+  "client_session_id",
+  "machine_name",
   "amended_from"
  ],
  "fields": [
@@ -21,7 +27,7 @@
    "fieldtype": "Select",
    "in_list_view": 1,
    "label": "Tipo",
-   "options": "Monto pendiente\nCancelar Factura\nEliminar Producto\nDescuento Factura\nDescuento Producto",
+   "options": "Monto pendiente\nCancelar Factura\nEliminar Producto\nDescuento Factura\nDescuento Producto\nCierre Inesperado",
    "reqd": 1
   },
   {
@@ -33,16 +39,56 @@
    "reqd": 1
   },
   {
+   "fieldname": "pos_opening_shift",
+   "fieldtype": "Link",
+   "label": "Turno de Caja",
+   "options": "POS Opening Shift",
+   "read_only": 1
+  },
+  {
    "fieldname": "user",
    "fieldtype": "Data",
    "in_list_view": 1,
-   "label": "Usuario",
+   "label": "Usuario (Cajero)",
+   "read_only": 1
+  },
+  {
+   "fieldname": "authorized_by",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Autorizado por (Supervisor)",
    "read_only": 1
   },
   {
    "fieldname": "amount",
    "fieldtype": "Currency",
    "label": "Monto"
+  },
+  {
+   "fieldname": "invoice_name",
+   "fieldtype": "Data",
+   "label": "Factura / Referencia",
+   "read_only": 1
+  },
+  {
+   "fieldname": "reason",
+   "fieldtype": "Small Text",
+   "in_list_view": 1,
+   "label": "Motivo / Justificaci\u00f3n",
+   "read_only": 1
+  },
+  {
+   "fieldname": "client_session_id",
+   "fieldtype": "Data",
+   "label": "ID de Sesi\u00f3n Cliente",
+   "read_only": 1,
+   "search_index": 1
+  },
+  {
+   "fieldname": "machine_name",
+   "fieldtype": "Data",
+   "label": "Equipo / Terminal",
+   "read_only": 1
   },
   {
    "fieldname": "amended_from",
@@ -64,7 +110,7 @@
  "index_web_pages_for_search": 1,
  "is_submittable": 1,
  "links": [],
- "modified": "2025-07-03 20:18:29.749365",
+ "modified": "2026-11-25 02:00:00.000000",
  "modified_by": "Administrator",
  "module": "POSAwesome",
  "name": "Historial de autorizaciones en POS",
@@ -82,6 +128,14 @@
    "role": "System Manager",
    "share": 1,
    "write": 1
+  },
+  {
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Supervisor POS Profile"
   }
  ],
  "sort_field": "modified",
