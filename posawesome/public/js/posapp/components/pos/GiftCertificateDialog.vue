@@ -26,12 +26,12 @@
               </v-col>
               <v-col cols="12" sm="6" class="py-2">
                 <v-text-field
-                  v-model="beneficiario"
+                  v-model="remitente"
                   dense
                   outlined
                   hide-details="auto"
                   color="primary"
-                  :label="__('Para (Portador / Beneficiario)')"
+                  :label="__('De: (Ej. Tus Abuelos)')"
                   background-color="white"
                 ></v-text-field>
               </v-col>
@@ -49,6 +49,17 @@
                 ></v-text-field>
               </v-col>
               <v-col cols="12" sm="6" class="py-2">
+                <v-text-field
+                  v-model="beneficiario"
+                  dense
+                  outlined
+                  hide-details="auto"
+                  color="primary"
+                  :label="__('Para:')"
+                  background-color="white"
+                ></v-text-field>
+              </v-col>
+              <v-col cols="12" sm="6" class="py-2">
                 <v-select
                   v-model="mode_of_payment"
                   :items="paymentModes"
@@ -62,23 +73,23 @@
               </v-col>
               <v-col cols="12" sm="6" class="py-2">
                 <v-text-field
+                  v-model="notas"
+                  dense
+                  outlined
+                  hide-details="auto"
+                  color="primary"
+                  :label="__('Comentario')"
+                  background-color="white"
+                ></v-text-field>
+              </v-col>
+              <v-col cols="12" class="py-2">
+                <v-text-field
                   v-model="referencia_pago"
                   dense
                   outlined
                   hide-details="auto"
                   color="primary"
                   :label="__('No. Referencia / Voucher')"
-                  background-color="white"
-                ></v-text-field>
-              </v-col>
-              <v-col cols="12" sm="6" class="py-2">
-                <v-text-field
-                  v-model="notas"
-                  dense
-                  outlined
-                  hide-details="auto"
-                  color="primary"
-                  :label="__('Dedicatoria / Nota')"
                   background-color="white"
                 ></v-text-field>
               </v-col>
@@ -160,9 +171,9 @@
                     {{ certInfo.codigo_enmascarado }}
                   </div>
                   <div class="caption">
-                    {{ __('Comprador:') }}
-                    {{ certInfo.nombre_comprador || certInfo.comprador }} |
-                    {{ __('Portador:') }} {{ certInfo.beneficiario }}
+                    {{ __('De:') }}
+                    {{ certInfo.remitente || certInfo.nombre_comprador || certInfo.comprador }} |
+                    {{ __('Para:') }} {{ certInfo.beneficiario }}
                   </div>
                 </v-col>
                 <v-col cols="6" sm="3" class="text-right">
@@ -236,6 +247,7 @@ export default {
     pos_opening_shift: '',
     pos_profile: '',
     comprador: '',
+    remitente: '',
     beneficiario: '',
     monto_inicial: 0,
     mode_of_payment: '',
@@ -258,6 +270,7 @@ export default {
     closeEmitDialog() {
       this.emitDialog = false;
       this.monto_inicial = 0;
+      this.remitente = '';
       this.beneficiario = '';
       this.referencia_pago = '';
       this.notas = '';
@@ -309,6 +322,7 @@ export default {
           company: this.pos_profile.company,
           pos_opening_shift: this.pos_opening_shift,
           pos_profile: this.pos_profile.name,
+          remitente: this.remitente,
           beneficiario: this.beneficiario,
           referencia_pago: this.referencia_pago,
           notas: this.notas,
@@ -336,7 +350,7 @@ export default {
         frappe.urllib.get_base_url() +
         '/printview?doctype=Certificado%20de%20Regalo&name=' +
         encodeURIComponent(certName) +
-        '&trigger_print=1&format=Voucher%20Certificado%20de%20Regalo&no_letterhead=1';
+        '&trigger_print=1&no_letterhead=1';
       const printWindow = window.open(url, 'PrintGiftCert');
       if (printWindow) {
         printWindow.addEventListener(
