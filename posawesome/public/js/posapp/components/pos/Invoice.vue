@@ -961,6 +961,7 @@ export default {
       pending_amount_auth_dialog: false,
       total_price: 0,
       auth_code: '',
+      verifying_auth: false,
       auth_error: false,
       discount_password: "",
       show_discount_password_warning: false,
@@ -1059,37 +1060,63 @@ export default {
   },
 
   methods: {
-    verifyAuthorization() {
-      if (this.pos_profile.password_manager === this.auth_code) {
-        this.pending_amount_auth_dialog = false;
-        this.auth_error = false;
-
-        const totalPrice = localStorage.getItem('totalPrice');
-        localStorage.removeItem("totalPrice");
-
-        this.history_auth("Monto pendiente", totalPrice);
-
-        const args = {
-          amount: totalPrice,
-          pos_opening_shift: this.pos_opening_shift.name,
-          note: "Se cerró la pestaña con una factura en proceso y un monto pendiente de " + totalPrice,
-          type_transaction: "Ingreso",
-        };
-
+    server_authorize(code, type, amount) {
+      // The supervisor key is verified on the server (it is never sent to the browser).
+      // The server also records the authorization in "Historial de autorizaciones en POS".
+      return new Promise((resolve) => {
         frappe.call({
-          method: 'posawesome.posawesome.api.posapp.create_withdrawal_income',
-          args,
-          callback: (r) => {
-            if (!r.exc && r.message.name) {
-              let text = __('Creado exitosamente.');
-            } else {
-              frappe.utils.play_sound('error');
-            }
+          method: 'posawesome.posawesome.api.posapp.verify_authorization',
+          args: {
+            pos_profile: this.pos_profile.name,
+            code: code,
+            type: type,
+            amount: amount || 0,
           },
+          callback: (r) => {
+            const res = r.message || { authorized: false, reason: 'invalid' };
+            if (!res.authorized && res.reason && res.reason !== 'invalid') {
+              evntBus.$emit('show_mesage', { text: res.message, color: 'error' });
+            }
+            resolve(res);
+          },
+          error: () => resolve({ authorized: false, reason: 'error' }),
         });
-      } else {
+      });
+    },
+
+    async verifyAuthorization() {
+      if (this.verifying_auth) return;
+      const totalPrice = localStorage.getItem('totalPrice');
+      this.verifying_auth = true;
+      const res = await this.server_authorize(this.auth_code, 'Monto pendiente', totalPrice);
+      this.verifying_auth = false;
+
+      if (!res.authorized) {
         this.auth_error = true;
+        return;
       }
+
+      this.pending_amount_auth_dialog = false;
+      this.auth_error = false;
+      this.auth_code = '';
+      localStorage.removeItem('totalPrice');
+
+      const args = {
+        amount: totalPrice,
+        pos_opening_shift: this.pos_opening_shift.name,
+        note: 'Se cerró la pestaña con una factura en proceso y un monto pendiente de ' + totalPrice,
+        type_transaction: 'Ingreso',
+      };
+
+      frappe.call({
+        method: 'posawesome.posawesome.api.posapp.create_withdrawal_income',
+        args,
+        callback: (r) => {
+          if (r.exc || !r.message || !r.message.name) {
+            frappe.utils.play_sound('error');
+          }
+        },
+      });
     },
 
     open_item_discount_authorization(item) {
@@ -1102,13 +1129,17 @@ export default {
     is_item_authorized(item) {
       return this.item_discount_authorization_items.includes(item);
     },
-    confirm_item_discount_authorization() {
-      if (this.item_discount_password === this.pos_profile.password_manager) {
+    async confirm_item_discount_authorization() {
+      if (this.verifying_auth) return;
+      this.verifying_auth = true;
+      const res = await this.server_authorize(this.item_discount_password, 'Descuento Producto', 0);
+      this.verifying_auth = false;
+      if (res.authorized) {
         this.item_discount_authorization_items.push(this.current_item_pending_auth);
         this.item_discount_dialog = false;
-        this.history_auth("Descuento Producto", 0);
-      } else {
-        this.$toast?.error?.("Código incorrecto");
+        this.item_discount_password = '';
+      } else if (res.reason === 'invalid') {
+        evntBus.$emit('show_mesage', { text: __('Código incorrecto'), color: 'error' });
       }
     },
 
@@ -1118,23 +1149,28 @@ export default {
       }
     },
 
-    authorize_discount() {
+    async authorize_discount() {
       if (!this.discount_password) {
-        this.$toast?.error?.("Ingrese el código de autorización");
+        evntBus.$emit('show_mesage', { text: __('Ingrese el código de autorización'), color: 'error' });
         return;
       }
+      if (this.verifying_auth) return;
+      this.verifying_auth = true;
+      const res = await this.server_authorize(this.discount_password, 'Descuento Factura', 0);
+      this.verifying_auth = false;
 
-      if (this.pos_profile.password_manager === this.discount_password) {
+      if (res.authorized) {
         this.discount_authorization = true;
         this.$nextTick(() => {
           // da foco al campo después de autorizar
           this.$refs.percentage_discount?.focus();
         });
-        this.history_auth("Descuento Factura", 0);
         this.closeDiscountDialog();
       } else {
         this.show_discount_password_warning = true;
-        this.$toast?.error?.("Código incorrecto");
+        if (res.reason === 'invalid') {
+          evntBus.$emit('show_mesage', { text: __('Código incorrecto'), color: 'error' });
+        }
       }
     },
 
@@ -1142,26 +1178,6 @@ export default {
       this.discount_auth_dialog = false;
       this.discount_password = "";
       this.show_discount_password_warning = false;
-    },
-
-    history_auth(type, amount) {
-      const args = {
-          type: type,
-          pos_profile: this.pos_profile.name,
-          amount: amount
-        };
-
-        frappe.call({
-          method: 'posawesome.posawesome.api.posapp.create_history_authorization',
-          args,
-          callback: (r) => {
-            if (!r.exc && r.message.name) {
-              let text = __('Historial de autorización creado exitosamente.');
-            } else {
-              frappe.utils.play_sound('error');
-            }
-          },
-        });
     },
 
     onQtyChange(item, value) {
@@ -1202,20 +1218,27 @@ export default {
       this.item_to_remove = null;
     },
 
-    authorization_remove_item() {
+    async authorization_remove_item() {
       if (!this.remove_password) {
-        this.$toast?.error?.("Ingrese el código de autorización");
+        evntBus.$emit('show_mesage', { text: __('Ingrese el código de autorización'), color: 'error' });
         return;
       }
+      if (this.verifying_auth || !this.item_to_remove) return;
 
-      if (this.pos_profile.password_manager === this.remove_password) {
-        this.removeSelectedItem(this.item_to_remove);
-        let price_item = this.item_to_remove.price_list_rate * this.item_to_remove.qty
-        this.history_auth("Eliminar Producto", price_item);
+      const item = this.item_to_remove;
+      const price_item = this.flt(item.price_list_rate) * this.flt(item.qty);
+      this.verifying_auth = true;
+      const res = await this.server_authorize(this.remove_password, 'Eliminar Producto', price_item);
+      this.verifying_auth = false;
+
+      if (res.authorized) {
+        this.removeSelectedItem(item);
         this.closeRemoveDialog();
       } else {
         this.show_remove_password_warning = true;
-        this.$toast?.error?.("Código incorrecto");
+        if (res.reason === 'invalid') {
+          evntBus.$emit('show_mesage', { text: __('Código incorrecto'), color: 'error' });
+        }
       }
     },
 
@@ -1374,23 +1397,32 @@ export default {
       return new_item;
     },
 
-    authorization_cancel_invoice(password) {
+    async authorization_cancel_invoice(password) {
       if (!password) {
-        this.$toast?.error?.("Ingrese el código de autorización");
+        evntBus.$emit('show_mesage', { text: __('Ingrese el código de autorización'), color: 'error' });
         return;
       }
+      if (this.verifying_auth) return;
 
-      if (this.pos_profile.password_manager === password) {
+      const total = this.items.reduce(
+        (sum, item) => sum + this.flt(item.rate) * this.flt(item.qty),
+        0
+      );
+      this.verifying_auth = true;
+      const res = await this.server_authorize(password, 'Cancelar Factura', total);
+      this.verifying_auth = false;
+
+      if (res.authorized) {
         this.show_invalid_password_warning = false; // Oculta el mensaje si es correcto
-        this.items.forEach((item) => {
-          this.total_cancel += item.rate;
-        });
-        this.history_auth("Cancelar Factura", this.total_cancel);
-        localStorage.removeItem("totalPrice");
+        this.total_cancel = this.flt(total, this.currency_precision);
+        this.cancel_password = '';
+        localStorage.removeItem('totalPrice');
         this.cancel_invoice();
       } else {
         this.show_invalid_password_warning = true; // Muestra el mensaje si es incorrecto
-        this.$toast?.error?.("Código incorrecto");
+        if (res.reason === 'invalid') {
+          evntBus.$emit('show_mesage', { text: __('Código incorrecto'), color: 'error' });
+        }
       }
     },
 

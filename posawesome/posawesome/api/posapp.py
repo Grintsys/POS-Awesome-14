@@ -3,9 +3,11 @@
 # For license information, please see license.txt
 
 from __future__ import unicode_literals
+import hmac
 import json
 import frappe
-from frappe.utils import nowdate, flt, cstr, getdate
+from frappe.utils import nowdate, flt, cint, cstr, getdate
+from frappe.utils.password import get_decrypted_password
 from frappe import _
 from frappe.translate import get_user_lang
 from erpnext.accounts.doctype.sales_invoice.sales_invoice import get_bank_cash_account
@@ -119,6 +121,8 @@ def check_opening_shift(user):
 
 def update_opening_shift_data(data, pos_profile):
     data["pos_profile"] = frappe.get_doc("POS Profile", pos_profile)
+    # Never send the supervisor authorization key to the browser.
+    data["pos_profile"].password_manager = None
     data["company"] = frappe.get_doc("Company", data["pos_profile"].company)
     allow_negative_stock = frappe.get_value(
         "Stock Settings", None, "allow_negative_stock"
@@ -176,10 +180,8 @@ def get_items(
                 item_code, serial_no, batch_no, barcode
             )
             if item_group:
-                condition += " AND item_group like '%{item_group}%'".format(
-                    item_group=item_group
-                )
-            limit = " LIMIT {search_limit}".format(search_limit=search_limit)
+                condition += _item_group_like_condition(item_group)
+            limit = " LIMIT {search_limit}".format(search_limit=cint(search_limit))
 
         if not posa_show_template_items:
             condition += " AND has_variants = 0"
@@ -335,6 +337,13 @@ def get_items(
         return _get_items(pos_profile, price_list, item_group, search_value, customer)
 
 
+def _item_group_like_condition(item_group):
+    """Build a safely escaped LIKE filter for the Item Group search value."""
+    return " AND item_group like {0}".format(
+        frappe.db.escape("%" + cstr(item_group) + "%")
+    )
+
+
 def get_item_group_condition(pos_profile):
     cond = " and 1=1"
     item_groups = get_item_groups(pos_profile)
@@ -392,7 +401,7 @@ def get_child_nodes(group_type, root):
     return frappe.db.sql(
         """ Select name, lft, rgt from `tab{tab}` where
 			lft >= {lft} and rgt <= {rgt} order by lft""".format(
-            tab=group_type, lft=lft, rgt=rgt
+            tab=group_type, lft=cint(lft), rgt=cint(rgt)
         ),
         as_dict=1,
     )
@@ -904,7 +913,20 @@ def get_draft_invoices(pos_opening_shift):
 
 @frappe.whitelist()
 def delete_invoice(invoice):
-    if frappe.get_value("Sales Invoice", invoice, "posa_is_printed"):
+    values = frappe.db.get_value(
+        "Sales Invoice",
+        invoice,
+        ["docstatus", "posa_is_printed", "posa_pos_opening_shift"],
+        as_dict=True,
+    )
+    if not values:
+        frappe.throw(_("Invoice {0} does not exist").format(invoice), frappe.DoesNotExistError)
+    # Only draft invoices created from a POS shift can be deleted from the POS.
+    if (
+        values.docstatus != 0
+        or values.posa_is_printed
+        or not values.posa_pos_opening_shift
+    ):
         frappe.throw(_("This invoice {0} cannot be deleted").format(invoice))
     frappe.delete_doc("Sales Invoice", invoice, force=1)
     return _("Invoice {0} Deleted").format(invoice)
@@ -1128,6 +1150,7 @@ def create_withdrawal_income(
     note,
     type_transaction,
 ):
+    amount = _validate_cash_movement(amount, pos_opening_shift, type_transaction)
     register = frappe.get_doc(
         {
             "doctype": "Retiro de efectivo",
@@ -1141,23 +1164,102 @@ def create_withdrawal_income(
     register.submit() 
     return register
 
-@frappe.whitelist()
-def create_history_authorization(
-    type,
-    pos_profile,
-    amount
-):
+def _validate_cash_movement(amount, pos_opening_shift, type_transaction):
+    """Validate a cash withdrawal/income request on the server and return the numeric amount."""
+    if type_transaction not in ("Retiro", "Ingreso"):
+        frappe.throw(_("Tipo de movimiento de efectivo inválido."))
+    amount = flt(amount)
+    if amount <= 0:
+        frappe.throw(_("El monto del movimiento de efectivo debe ser mayor a cero."))
+    shift = frappe.db.get_value(
+        "POS Opening Shift", pos_opening_shift, ["status", "docstatus"], as_dict=True
+    )
+    if not shift or shift.docstatus != 1 or shift.status != "Open":
+        frappe.throw(_("El turno de caja no existe o no está abierto."))
+    return amount
+
+
+# Authorization types accepted by the "Historial de autorizaciones en POS" DocType.
+AUTH_TYPES = (
+    "Monto pendiente",
+    "Cancelar Factura",
+    "Eliminar Producto",
+    "Descuento Factura",
+    "Descuento Producto",
+)
+AUTH_MAX_ATTEMPTS = 5
+AUTH_LOCK_SECONDS = 300
+
+
+def _get_authorization_key(pos_profile):
+    """Return the supervisor authorization key stored (encrypted) in the POS Profile."""
+    return get_decrypted_password(
+        "POS Profile", pos_profile, "password_manager", raise_exception=False
+    )
+
+
+def _create_authorization_history(type, pos_profile, amount):
+    """Register a verified authorization (user and timestamp are set by the DocType)."""
     register = frappe.get_doc(
         {
             "doctype": "Historial de autorizaciones en POS",
             "type": type,
             "pos_profile": pos_profile,
-            "amount": amount
+            "amount": flt(amount),
         }
     )
+    register.flags.ignore_permissions = True
     register.insert()
-    register.submit() 
+    register.submit()
     return register
+
+
+@frappe.whitelist(methods=["POST"])
+def verify_authorization(pos_profile, code, type, amount=0):
+    """Verify the supervisor key on the server and log the authorization.
+
+    The key never leaves the server: the browser only sends what the cashier typed and
+    receives a yes/no answer. Failed attempts are limited per user and POS Profile.
+    """
+    if frappe.session.user == "Guest":
+        frappe.throw(_("Debe iniciar sesión."), frappe.PermissionError)
+    if type not in AUTH_TYPES:
+        frappe.throw(_("Tipo de autorización inválido."))
+    if not frappe.db.exists("POS Profile", pos_profile):
+        frappe.throw(_("El perfil de punto de venta no existe."))
+
+    cache = frappe.cache()
+    attempts_key = "posa_auth_failures:{0}:{1}".format(frappe.session.user, pos_profile)
+    if cint(cache.get_value(attempts_key, expires=True)) >= AUTH_MAX_ATTEMPTS:
+        return {
+            "authorized": False,
+            "locked": True,
+            "reason": "locked",
+            "message": _(
+                "Demasiados intentos fallidos. Espere {0} minutos e intente de nuevo."
+            ).format(AUTH_LOCK_SECONDS // 60),
+        }
+
+    stored_key = cstr(_get_authorization_key(pos_profile))
+    if not stored_key:
+        return {
+            "authorized": False,
+            "reason": "not_configured",
+            "message": _("El perfil no tiene una clave de autorización configurada."),
+        }
+
+    if not hmac.compare_digest(stored_key.encode("utf-8"), cstr(code).encode("utf-8")):
+        cache.set_value(
+            attempts_key,
+            cint(cache.get_value(attempts_key, expires=True)) + 1,
+            expires_in_sec=AUTH_LOCK_SECONDS,
+        )
+        return {"authorized": False, "reason": "invalid", "message": _("Código incorrecto")}
+
+    cache.delete_value(attempts_key)
+    register = _create_authorization_history(type, pos_profile, amount)
+    return {"authorized": True, "history": register.name}
+
 
 @frappe.whitelist()
 def create_withdrawal_income_draft(
@@ -1166,6 +1268,7 @@ def create_withdrawal_income_draft(
     note,
     type_transaction,
 ):
+    amount = _validate_cash_movement(amount, pos_opening_shift, type_transaction)
     register = frappe.get_doc(
         {
             "doctype": "Retiro de efectivo",
@@ -1250,6 +1353,8 @@ def get_items_from_barcode(selling_price_list, currency, barcode):
 
 @frappe.whitelist()
 def set_customer_info(customer, fieldname, value=""):
+    if fieldname not in ("loyalty_program", "email_id", "mobile_no"):
+        frappe.throw(_("Campo de cliente no permitido."))
     if fieldname == "loyalty_program":
         frappe.db.set_value("Customer", customer, "loyalty_program", value)
 
@@ -1412,12 +1517,11 @@ def get_customer_addresses(customer):
         INNER JOIN `tabDynamic Link` AS link
 				ON address.name = link.parent
         WHERE link.link_doctype = 'Customer'
-            AND link.link_name = '{0}'
+            AND link.link_name = %(customer)s
             AND address.disabled = 0
         ORDER BY address.name
-        """.format(
-            customer
-        ),
+        """,
+        {"customer": customer},
         as_dict=1,
     )
 
@@ -1876,6 +1980,7 @@ def get_seearch_items_conditions(item_code, serial_no, batch_no, barcode):
 
 @frappe.whitelist()
 def create_sales_invoice_from_order(sales_order):
+    frappe.has_permission("Sales Order", ptype="read", doc=sales_order, throw=True)
     sales_invoice = make_sales_invoice(sales_order, ignore_permissions=True)
     sales_invoice.save()
     return sales_invoice
@@ -1883,6 +1988,8 @@ def create_sales_invoice_from_order(sales_order):
 
 @frappe.whitelist()
 def delete_sales_invoice(sales_invoice):
+    if frappe.db.get_value("Sales Invoice", sales_invoice, "docstatus") != 0:
+        frappe.throw(_("Only draft invoices can be deleted"))
     frappe.delete_doc("Sales Invoice", sales_invoice)
 
 
